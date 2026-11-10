@@ -249,10 +249,133 @@ test('Mobile flashcard UI + D1 API end-to-end flow: two-step flip, refresh resum
   const copied = JSON.parse(win2.getClipboardText());
   assert.equal(copied.schema_version, 2);
   assert.equal(copied.date, '2026-11-10');
+  assert.equal(copied.all_synced, true);
+  assert.equal(copied.unsynced_count, 0);
   assert.match(copied.exported_at, /\+08:00$/);
   assert.equal(copied.results.length, 2);
   assert.equal(copied.results[0].word_id, 'crave-v-1');
   assert.equal(copied.results[0].stage_before, 1);
   assert.equal(copied.results[0].stage_after, 2);
   assert.equal(copied.results[0].press_count, 2);
+  assert.equal(copied.results[0].synced, true);
 });
+
+test('Failed POST /api/review stays as pending_retry (not skipped on refresh, never falsely completed, accurate stage_after in export)', async () => {
+  const db = createTestD1WithMigration();
+  db.sqlite.prepare(`
+    INSERT INTO words (
+      id, english, ipa, pos, chinese_sense,
+      original_context, usage_notes, examples_json,
+      added_at, stage, next_review_date,
+      last_feedback, last_feedback_at, paused
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    'crave-v-1', 'crave', '/kreɪv/', 'v.', '渴望，热望',
+    '读文章：People crave sugar.', '比 want 语气强烈',
+    JSON.stringify([
+      { en: 'She craved a quiet evening.', zh: '她渴望一个安静的夜晚。' },
+      { en: 'He craves attention.', zh: '他渴望关注。' },
+      { en: 'They crave fresh air.', zh: '他们渴望新鲜空气。' }
+    ]),
+    '2026-11-01T09:00:00+08:00', 1, '2026-11-08', 'remembered', '2026-11-05T08:00:00+08:00', 0
+  );
+
+  const env1 = createMockDomAndWindow(db, '2026-11-10');
+  let failPost = true;
+  const origFetch = env1.win.fetch.bind(env1.win);
+  env1.win.fetch = async (url, init = {}) => {
+    if (String(url).includes('/api/review') && failPost) {
+      throw new Error('Network disconnected');
+    }
+    return origFetch(url, init);
+  };
+
+  globalThis.window = env1.win;
+  const app1 = createFlashcardApp(env1.doc, env1.win);
+  await app1.init();
+
+  // 1. Flip the only card (crave-v-1, stage=1, due=2026-11-08) and click "记住了" while POST fails
+  app1.revealCard();
+  await app1.handleGradeClick('remembered');
+
+  // Must stay on Card #1 (currentIndex === 0) and MUST NOT show done-view!
+  assert.equal(app1.state.currentIndex, 0);
+  assert.equal(env1.elements.get('card-view').hidden, false);
+  assert.equal(env1.elements.get('done-view').hidden, true);
+  assert.equal(env1.elements.get('status-banner').hidden, false);
+  assert.match(env1.elements.get('today-graded-badge').textContent, /待重试：记住了（未同步）/);
+
+  // Confirmed receiptsMap must be empty; pendingRetriesMap has the computed stage_after=2, next_review_date_after=2026-11-17
+  assert.equal(app1.state.receiptsMap.size, 0);
+  const pending1 = app1.state.pendingRetriesMap.get('crave-v-1');
+  assert.ok(pending1);
+  assert.equal(pending1.stage_before, 1);
+  assert.equal(pending1.next_review_date_before, '2026-11-08');
+  assert.equal(pending1.stage_after, 2);
+  assert.equal(pending1.next_review_date_after, '2026-11-17');
+  assert.equal(pending1.synced, false);
+  assert.equal(pending1.sync_status, 'pending_retry');
+
+  // 2. Refresh page while POST is STILL failing (sharing the same localStorage)
+  const env2 = createMockDomAndWindow(db, '2026-11-10');
+  env2.win.localStorage = env1.win.localStorage;
+  env2.win.fetch = env1.win.fetch;
+  globalThis.window = env2.win;
+
+  const app2 = createFlashcardApp(env2.doc, env2.win);
+  await app2.init();
+
+  // Must NOT skip crave-v-1 and must NOT show "今日复习已完成" (#done-view)!
+  assert.equal(app2.state.currentIndex, 0);
+  assert.equal(env2.elements.get('card-view').hidden, false);
+  assert.equal(env2.elements.get('done-view').hidden, true);
+  assert.equal(env2.elements.get('word-english').textContent, 'crave');
+  assert.equal(app2.state.isRevealed, true);
+  assert.match(env2.elements.get('status-banner').textContent, /待重试/);
+
+  // 3. Verify exported JSON when containing unsynced pending retry:
+  // stage_after and next_review_date_after are calculated from stage_before + result, and synced: false is marked
+  await app2.copyResultsToClipboard();
+  const exportedWhileOffline = JSON.parse(env2.win.getClipboardText());
+  assert.equal(exportedWhileOffline.all_synced, false);
+  assert.equal(exportedWhileOffline.unsynced_count, 1);
+  assert.equal(exportedWhileOffline.results.length, 1);
+  assert.deepEqual(
+    {
+      word_id: exportedWhileOffline.results[0].word_id,
+      result: exportedWhileOffline.results[0].result,
+      stage_before: exportedWhileOffline.results[0].stage_before,
+      next_review_date_before: exportedWhileOffline.results[0].next_review_date_before,
+      stage_after: exportedWhileOffline.results[0].stage_after,
+      next_review_date_after: exportedWhileOffline.results[0].next_review_date_after,
+      synced: exportedWhileOffline.results[0].synced,
+      sync_status: exportedWhileOffline.results[0].sync_status
+    },
+    {
+      word_id: 'crave-v-1',
+      result: 'remembered',
+      stage_before: 1,
+      next_review_date_before: '2026-11-08',
+      stage_after: 2,
+      next_review_date_after: '2026-11-17',
+      synced: false,
+      sync_status: 'pending_retry'
+    }
+  );
+
+  // 4. Network recovers -> refreshing page auto-retries pending submission into D1 and completes session!
+  failPost = false;
+  const env3 = createMockDomAndWindow(db, '2026-11-10');
+  env3.win.localStorage = env1.win.localStorage;
+  globalThis.window = env3.win;
+
+  const app3 = createFlashcardApp(env3.doc, env3.win);
+  await app3.init();
+
+  assert.equal(app3.state.pendingRetriesMap.size, 0);
+  assert.equal(app3.state.receiptsMap.size, 1);
+  assert.equal(app3.state.receiptsMap.get('crave-v-1').synced, true);
+  assert.equal(env3.elements.get('done-view').hidden, false);
+  assert.equal(env3.elements.get('stat-remembered').textContent, '1');
+});
+

@@ -319,13 +319,15 @@ WHERE w.paused = 0
 
 ## 5. 完成页“一键复制今日结果”兜底格式
 
-当全部到期卡片复习完毕后，完成页除展示今日统计（记住了 / 有点熟 / 忘了 各几张）外，仍提供 **「一键复制今日结果」** 按钮，导出如下包含前因后果的 JSON（可供备份或发给 Grok Bot 核对）：
+当全部到期卡片复习完毕（或存在尚未同步的“待重试”记录）时，完成页提供 **「一键复制今日结果」** 按钮，导出包含前因后果及同步状态标识的 JSON（未成功写入 D1 的待重试项也会根据 `stage_before` 与按钮结果按同一套排期公式算出 `stage_after` 和 `next_review_date_after`，并明确标出 `"synced": false, "sync_status": "pending_retry"`）：
 
 ```json
 {
   "schema_version": 2,
   "date": "2026-11-10",
   "exported_at": "2026-11-10T08:20:00+08:00",
+  "all_synced": true,
+  "unsynced_count": 0,
   "results": [
     {
       "word_id": "crave-v-1",
@@ -336,7 +338,9 @@ WHERE w.paused = 0
       "stage_after": 2,
       "next_review_date_after": "2026-11-17",
       "reviewed_at": "2026-11-10T08:14:26+08:00",
-      "press_count": 1
+      "press_count": 1,
+      "synced": true,
+      "sync_status": "synced"
     }
   ]
 }
