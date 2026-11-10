@@ -1,0 +1,11 @@
+{
+  "name": "english-vocabulary-flashcards",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personal mobile English vocabulary flashcards backed by Cloudflare Pages Functions and D1",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "test:unit": "node --test tests/scheduler.test.mjs"
+  }
+}
