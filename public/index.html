@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <title>今日生词复习</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header id="top-bar" class="top-bar">
+      <div class="top-meta">
+        <span id="review-date" class="date-badge">----/--/--</span>
+        <span id="sync-indicator" class="sync-indicator" hidden>同步中...</span>
+      </div>
+      <div class="top-progress">
+        <button id="btn-prev-card" type="button" class="nav-link-btn" hidden aria-label="查看上一张卡片">
+          ← 上一张
+        </button>
+        <span id="progress-text" class="progress-text">0 / 0</span>
+      </div>
+    </header>
+
+    <div id="status-banner" class="status-banner" role="alert" hidden></div>
+
+    <main class="main-area">
+      <!-- 加载状态 -->
+      <section id="loading-view" class="state-card">
+        <p class="state-title">正在读取今日到期生词...</p>
+      </section>
+
+      <!-- 今日无到期词状态 -->
+      <section id="empty-view" class="state-card" hidden>
+        <h1 class="state-title">今天没有到期生词</h1>
+        <p class="state-desc">所有已收录生词均未到复习日期，好好休息吧。</p>
+      </section>
+
+      <!-- 单张闪卡视图 -->
+      <section id="card-view" class="card-stage" hidden>
+        <article
+          id="flashcard"
+          class="flashcard"
+          role="button"
+          tabindex="0"
+          aria-expanded="false"
+          aria-label="生词闪卡，点击翻开释义与例句"
+        >
+          <!-- 正面：英文、带重音音标、词性 -->
+          <div id="card-front" class="card-front">
+            <div class="card-front-header">
+              <span id="word-pos" class="pos-tag"></span>
+              <span id="today-graded-badge" class="graded-badge" hidden></span>
+            </div>
+            <h1 id="word-english" class="word-english"></h1>
+            <p id="word-ipa" class="word-ipa"></p>
+            <p id="flip-hint" class="flip-hint">点击卡片翻开释义、原场景与例句</p>
+          </div>
+
+          <!-- 背面：翻开后才显示中文意思、原场景、辨析、示例例句 -->
+          <div id="card-back" class="card-back" hidden>
+            <hr class="card-divider" />
+
+            <div class="field-block">
+              <h2 class="field-label">中文意思</h2>
+              <p id="word-chinese" class="word-chinese"></p>
+            </div>
+
+            <div class="field-block">
+              <h2 class="field-label">原场景</h2>
+              <p id="word-context" class="field-content context-text"></p>
+            </div>
+
+            <div class="field-block">
+              <h2 class="field-label">近义词辨析 / 注解</h2>
+              <p id="word-notes" class="field-content"></p>
+            </div>
+
+            <div id="word-example-box" class="field-block example-box">
+              <div class="example-header">
+                <span id="example-label" class="example-badge">示例</span>
+              </div>
+              <p id="example-en" class="example-en"></p>
+              <p id="example-zh" class="example-zh"></p>
+            </div>
+          </div>
+        </article>
+
+        <!-- 底部三按钮：仅在卡片翻开后显示 -->
+        <div id="action-bar" class="action-bar" hidden>
+          <button
+            id="btn-remembered"
+            type="button"
+            class="grade-btn grade-remembered"
+            data-result="remembered"
+          >
+            <span class="grade-title">记住了</span>
+          </button>
+          <button
+            id="btn-familiar"
+            type="button"
+            class="grade-btn grade-familiar"
+            data-result="familiar"
+          >
+            <span class="grade-title">有点熟</span>
+          </button>
+          <button
+            id="btn-forgotten"
+            type="button"
+            class="grade-btn grade-forgotten"
+            data-result="forgotten"
+          >
+            <span class="grade-title">忘了</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- 今日完成视图（含一键复制兜底与回看修改） -->
+      <section id="done-view" class="state-card done-card" hidden>
+        <h1 class="state-title">今日复习已完成</h1>
+        <p id="done-subtitle" class="state-desc"></p>
+
+        <div class="stats-grid">
+          <div class="stat-item stat-remembered">
+            <span id="stat-remembered" class="stat-num">0</span>
+            <span class="stat-label">记住了</span>
+          </div>
+          <div class="stat-item stat-familiar">
+            <span id="stat-familiar" class="stat-num">0</span>
+            <span class="stat-label">有点熟</span>
+          </div>
+          <div class="stat-item stat-forgotten">
+            <span id="stat-forgotten" class="stat-num">0</span>
+            <span class="stat-label">忘了</span>
+          </div>
+        </div>
+
+        <div class="done-actions">
+          <button id="btn-copy-results" type="button" class="primary-btn">
+            一键复制今日结果
+          </button>
+          <button id="btn-review-cards" type="button" class="secondary-btn">
+            回看 / 修改今日卡片
+          </button>
+        </div>
+
+        <p id="copy-feedback" class="copy-feedback" hidden></p>
+
+        <details class="receipt-details">
+          <summary>查看今日结果 JSON 明细（兜底备份）</summary>
+          <textarea id="copy-preview" class="copy-preview" readonly rows="8"></textarea>
+        </details>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

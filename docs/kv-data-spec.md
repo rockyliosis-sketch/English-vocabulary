@@ -125,10 +125,16 @@ CREATE INDEX IF NOT EXISTS idx_review_logs_date
 ```
 > 注：写入 D1 `words.examples_json` 列时，将上述 `examples` 数组序列化为 JSON 字符串即可。
 
-#### 网站每日例句轮换规则（保证跨复习日必换、同日刷新不变）
-设单词共有 $N$ 条例句（$3 \le N \le 5$），该词在今天之前已发生过 `past_review_days` 次有效复习（即 `SELECT COUNT(*) FROM review_logs WHERE word_id = ? AND review_date < today`），且截至今天首次打开时的逾期天数为 `overdue_days = max(0, today - next_review_date_before_today)`，则今天展示的例句下标为：
+#### 网站每日例句轮换规则（保证跨复习日必换、同日按完刷新绝不跳句）
+设单词共有 $N$ 条例句（$3 \le N \le 5$）：
+- `past_review_days`：该词在今天之前已发生过的有效复习天数（`SELECT COUNT(*) FROM review_logs WHERE word_id = ? AND review_date < today`，严格小于 `today`，不含今天当天的记录）；
+- `due_date_before_today`：**当天第一次按之前的下次复习日期**，即优先取今日 `review_logs.next_review_date_before`（若今天尚未按过则取 `words.next_review_date`，等价于 `COALESCE(r.next_review_date_before, w.next_review_date)`）；
+- `overdue_days = max(0, today - due_date_before_today)`。
+
+则今天展示的例句下标为：
 $$\text{index} = (\text{past\_review\_days} + \text{overdue\_days}) \bmod N$$
-- **为什么不用“当前日期 mod $N$”**：因为间隔阶梯里有 `3` 天、`30` 天、`60` 天，若 $N=3$ 且按日期取模，隔 3 天、30 天或 60 天回来复习时余数相同，会永远看到同一条例句；而按 `past_review_days + overdue_days` 取模，既保证每次进入下一轮复习必定换下一条例句，又保证同一天内多次刷新或点按钮后例句固定不跳变。
+- **为什么同日按完按钮再刷新绝不会跳到另一句**：按完按钮后虽然 `words.next_review_date` 改成了未来日期，但今日 `review_logs.next_review_date_before` 锁死了今天第一次按之前的到期日，且 `past_review_days` 只统计 `< today` 的历史，因此 `overdue_days` 与 `past_review_days` 全天恒定不变。
+- **为什么不用“当前日期 mod $N$”**：因为间隔阶梯里有 `3` 天、`30` 天、`60` 天，若 $N=3$ 且按日期取模，隔 3 天、30 天或 60 天回来复习时余数相同，会永远看到同一条例句。
 
 ---
 
@@ -249,34 +255,29 @@ $$\text{index} = (\text{past\_review\_days} + \text{overdue\_days}) \bmod N$$
 
 ## 4. 词库助手的 D1 操作规范（最少请求 & 防冲突）
 
-### 4.1 每天早上获取“今天有几张”（仅需 1 次请求）
-词库助手每天早上只需对 D1 执行 **1 条 SQL 查询**（将 `?1` 替换为当天北京日期，如 `'2026-11-10'`）：
+### 4.1 每天早上获取“今天有几张”（标准带 JOIN 查询，仅需 1 次请求）
+词库助手每天早上固定执行以下 **带 `LEFT JOIN review_logs` 的 1 条 SQL 查询**（将 `?1` 替换为当天北京日期，如 `'2026-11-10'`，不要使用不带 JOIN 的简单 `COUNT`）：
 
 ```sql
-SELECT COUNT(*) AS due_count
-FROM words
-WHERE paused = 0
-  AND next_review_date <= ?1;
+SELECT
+  COUNT(*) AS total_due_today,
+  COALESCE(SUM(CASE WHEN r.word_id IS NULL THEN 1 ELSE 0 END), 0) AS remaining_due_today
+FROM words w
+LEFT JOIN review_logs r
+  ON r.word_id = w.id AND r.review_date = ?1
+WHERE w.paused = 0
+  AND (w.next_review_date <= ?1 OR r.word_id IS NOT NULL);
 ```
 - **返回结果示例**：
   ```json
   [
     {
-      "due_count": 6
+      "total_due_today": 6,
+      "remaining_due_today": 6
     }
   ]
   ```
-- 若希望即使在当天你已经提前背了几张后，助手仍能同时知道“今日总任务数”与“剩余未按数”，可用：
-  ```sql
-  SELECT
-    COUNT(*) AS total_due_today,
-     COALESCE(SUM(CASE WHEN r.word_id IS NULL THEN 1 ELSE 0 END), 0) AS remaining_due_today
-  FROM words w
-  LEFT JOIN review_logs r
-    ON r.word_id = w.id AND r.review_date = ?1
-  WHERE w.paused = 0
-    AND (w.next_review_date <= ?1 OR r.word_id IS NOT NULL);
-  ```
+- **为什么必须用这条带 JOIN 的 SQL**：如果当天早上在助手发消息前你已经先打开网页按过了几张卡，那些卡的 `words.next_review_date` 已经被更新到了明天或更晚；通过 `LEFT JOIN review_logs` 把 `r.review_date = ?1` 的词也纳入统计，`total_due_today` 始终代表今天全天的总任务张数（不会少报），同时 `remaining_due_today` 还能反映当前还剩几张没按。
 
 ### 4.2 写入新词（如何避免与网站同时改到同一个词）
 通过以下 3 层机制保证助手写词与网站背词**零冲突**：

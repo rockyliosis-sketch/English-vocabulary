@@ -1,0 +1,462 @@
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --text-primary: #14181f;
+  --text-secondary: #4a5568;
+  --text-muted: #718096;
+  --border: #e2e8f0;
+  --accent-bg: #edf2f7;
+  --example-bg: #f8fafc;
+  --green-bg: #ecfdf5;
+  --green-border: #10b981;
+  --green-text: #065f46;
+  --amber-bg: #fffbeb;
+  --amber-border: #f59e0b;
+  --amber-text: #92400e;
+  --red-bg: #fef2f2;
+  --red-border: #ef4444;
+  --red-text: #991b1b;
+  --radius: 16px;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-shell {
+  max-width: 520px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 12px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 顶部进度栏 */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 4px;
+}
+
+.top-meta,
+.top-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.date-badge {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--accent-bg);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.sync-indicator {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.progress-text {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.nav-link-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* 状态提示横幅 */
+.status-banner {
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  background: var(--red-bg);
+  border: 1px solid var(--red-border);
+  color: var(--red-text);
+}
+
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 空状态 / 完成状态通用卡片 */
+.state-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px 20px;
+  text-align: center;
+  margin: auto 0;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.state-title {
+  margin: 0 0 8px;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.state-desc {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+/* 闪卡主舞台 */
+.card-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.flashcard {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 20px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.15s ease;
+}
+
+.flashcard:focus-visible {
+  outline: 2px solid #3182ce;
+  outline-offset: 2px;
+}
+
+.card-front {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 16px 0 8px;
+}
+
+.card-front-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 28px;
+  margin-bottom: 8px;
+}
+
+.pos-tag {
+  display: inline-block;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #2b6cb0;
+  background: #ebf8ff;
+  padding: 3px 12px;
+  border-radius: 999px;
+}
+
+.graded-badge {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--accent-bg);
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.word-english {
+  margin: 12px 0 8px;
+  font-size: 2.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.word-ipa {
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--text-secondary);
+  font-family: "Lucida Sans Unicode", "Segoe UI", "Gentium Plus", "Charis SIL",
+    -apple-system, sans-serif;
+}
+
+.flip-hint {
+  margin: 36px 0 8px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  background: var(--accent-bg);
+  padding: 8px 16px;
+  border-radius: 999px;
+}
+
+/* 卡片背面内容 */
+.card-back {
+  user-select: text;
+  cursor: default;
+}
+
+.card-divider {
+  border: none;
+  border-top: 1px dashed var(--border);
+  margin: 16px 0 18px;
+}
+
+.field-block {
+  margin-bottom: 16px;
+}
+
+.field-block:last-child {
+  margin-bottom: 0;
+}
+
+.field-label {
+  margin: 0 0 4px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.word-chinese {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.field-content {
+  margin: 0;
+  font-size: 0.98rem;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+.context-text.is-missing {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.example-box {
+  background: var(--example-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.example-header {
+  margin-bottom: 6px;
+}
+
+.example-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #1e40af;
+  background: #dbeafe;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.example-en {
+  margin: 0 0 6px;
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.example-zh {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+}
+
+/* 底部三按钮栏 */
+.action-bar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.grade-btn {
+  appearance: none;
+  border-radius: 14px;
+  padding: 15px 8px;
+  font-size: 1.02rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.08s ease, opacity 0.15s ease;
+}
+
+.grade-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.grade-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.grade-btn.is-selected {
+  box-shadow: 0 0 0 2px var(--text-primary);
+}
+
+.grade-remembered {
+  background: var(--green-bg);
+  border-color: var(--green-border);
+  color: var(--green-text);
+}
+
+.grade-familiar {
+  background: var(--amber-bg);
+  border-color: var(--amber-border);
+  color: var(--amber-text);
+}
+
+.grade-forgotten {
+  background: var(--red-bg);
+  border-color: var(--red-border);
+  color: var(--red-text);
+}
+
+/* 完成页统计与复制按钮 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 22px 0;
+}
+
+.stat-item {
+  padding: 14px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-num {
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.stat-label {
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.stat-remembered {
+  background: var(--green-bg);
+  color: var(--green-text);
+  border-color: #a7f3d0;
+}
+
+.stat-familiar {
+  background: var(--amber-bg);
+  color: var(--amber-text);
+  border-color: #fde68a;
+}
+
+.stat-forgotten {
+  background: var(--red-bg);
+  color: var(--red-text);
+  border-color: #fecaca;
+}
+
+.done-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.primary-btn,
+.secondary-btn {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary-btn {
+  background: var(--text-primary);
+  color: #ffffff;
+  border: none;
+}
+
+.secondary-btn {
+  background: var(--surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.copy-feedback {
+  margin: 12px 0 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--green-text);
+}
+
+.receipt-details {
+  margin-top: 18px;
+  text-align: left;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.receipt-details summary {
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.copy-preview {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--example-bg);
+  color: var(--text-primary);
+}
