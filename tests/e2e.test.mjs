@@ -379,3 +379,24 @@ test('Failed POST /api/review stays as pending_retry (not skipped on refresh, ne
   assert.equal(env3.elements.get('stat-remembered').textContent, '1');
 });
 
+test('Responsive styles cover iPhone 17 Pro Max safe-area insets (440x956) and 12.9-inch iPad Pro portrait/landscape breakpoints (1024x1366 & 1366x1024)', () => {
+  const html = fs.readFileSync(path.resolve(__dirname, '../public/index.html'), 'utf-8');
+  const css = fs.readFileSync(path.resolve(__dirname, '../public/styles.css'), 'utf-8');
+
+  assert.match(html, /viewport-fit=cover/);
+  assert.match(html, /class="field-pair-grid"/);
+
+  // Safe area insets for Dynamic Island (top) and Home Indicator (bottom) + horizontal edges
+  assert.match(css, /env\(safe-area-inset-top/);
+  assert.match(css, /env\(safe-area-inset-bottom/);
+  assert.match(css, /env\(safe-area-inset-left/);
+  assert.match(css, /env\(safe-area-inset-right/);
+
+  // iPhone 17 Pro Max base container and iPad Pro portrait (768px -> 820px) / landscape (1180px -> 1080px) breakpoints
+  assert.match(css, /max-width:\s*460px/);
+  assert.match(css, /@media\s*\(min-width:\s*768px\)/);
+  assert.match(css, /max-width:\s*820px/);
+  assert.match(css, /@media\s*\(min-width:\s*1180px\)/);
+  assert.match(css, /max-width:\s*1080px/);
+  assert.match(css, /grid-template-columns:\s*310px\s+minmax\(0,\s*1fr\)/);
+});
