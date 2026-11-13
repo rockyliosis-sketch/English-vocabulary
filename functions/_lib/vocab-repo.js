@@ -39,6 +39,7 @@ SELECT
   w.original_context,
   w.usage_notes,
   w.examples_json,
+  w.related_words_json,
   w.added_at,
   w.stage,
   w.next_review_date,
@@ -70,7 +71,7 @@ ORDER BY COALESCE(r.next_review_date_before, w.next_review_date) ASC, w.id ASC;
 const WORD_BY_ID_SQL = `
 SELECT
   id, english, ipa, pos, chinese_sense,
-  original_context, usage_notes, examples_json,
+  original_context, usage_notes, examples_json, related_words_json,
   added_at, stage, next_review_date,
   last_feedback, last_feedback_at, paused
 FROM words

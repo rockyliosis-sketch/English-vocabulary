@@ -7,7 +7,7 @@
 ## 1. 角色分工与通用约定
 
 1. **闪卡网站（Cloudflare Pages + Pages Functions + D1 `VOCAB_DB`）**：
-   - 打开固定网址即查询当日到期词（`paused = 0` 且 `next_review_date <= 今日北京时间`），按正面（`english`、`ipa`、`pos`）→ 点击翻开背面（`chinese_sense`、`original_context`、`usage_notes`、当日轮换的 1 条 `"示例"` 例句）→ 显示底部三按钮（记住了 / 有点熟 / 忘了）的顺序交互。
+   - 打开固定网址即查询当日到期词（`paused = 0` 且 `next_review_date <= 今日北京时间`），按正面（`english`、`ipa`、`pos`）→ 点击翻开背面（`chinese_sense`、`original_context`、`usage_notes`、`related_words`（非空才显示）、当日轮换的 1 条 `"示例"` 例句）→ 显示底部三按钮（记住了 / 有点熟 / 忘了）的顺序交互。
    - 用户每次按下按钮，网站在 D1 事务中当场计算并更新该词的 `stage`、`next_review_date`、`last_feedback`、`last_feedback_at`，同时写入/更新 `review_logs` 复习历史表。
    - 完成页保留「一键复制今日结果」按钮作为极端断网兜底。
 2. **词库助手（Grok Bot，通过已连接的 Cloudflare 直接读写 D1）**：
@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS words (
   original_context TEXT,
   usage_notes TEXT,
   examples_json TEXT NOT NULL CHECK (json_valid(examples_json) AND json_array_length(examples_json) >= 1),
+  related_words_json TEXT DEFAULT '[]',
   added_at TEXT NOT NULL,
   stage INTEGER NOT NULL DEFAULT 0 CHECK (stage BETWEEN 0 AND 5),
   next_review_date TEXT NOT NULL,
@@ -84,12 +85,26 @@ CREATE INDEX IF NOT EXISTS idx_review_logs_date
 | `original_context` | `TEXT` | `string \| null` | 否 | 遇到该词的原场景。**为 `NULL` 或空字符串时，网站固定显示 `"原场景未提供"`** |
 | `usage_notes` | `TEXT` | `string \| null` | 否 | 近义词辨析或用法注解（为空时显示 `"暂无辨析注解"`） |
 | `examples_json` | `TEXT` | `array<object>` | 是 | 词库助手一次写好的 **3～5 条例句**，在库中存为 JSON 数组字符串，每项含 `en`（英文例句）与 `zh`（中文翻译）。网站每天轮换展示其中 1 条，并固定标 **`"示例"`** |
+| `related_words_json` | `TEXT` | `array<object>` | 否 | 默认 `[]`。每项为 `{english, ipa, pos, zh, relation}`；只展示，不创建词条、不参与排期或计数 |
 | `added_at` | `TEXT` | `string` | 是 | 收词时间（北京时间 `+08:00`，如 `"2026-11-10T09:00:00+08:00"`；既有词若仅知日期可填 `"YYYY-MM-DDT00:00:00+08:00"`） |
 | `stage` | `INTEGER` | `number` | 是 | 当前档位，整数 `0`～`5`，对应间隔阶梯 `[1, 3, 7, 14, 30, 60]` 天；新词固定从 `0` 开始 |
 | `next_review_date` | `TEXT` | `string` | 是 | 下次复习日期 `YYYY-MM-DD`（北京时间）；新词固定为**添加当天的下一天** |
 | `last_feedback` | `TEXT` | `string \| null` | 否 | 最近一次按钮结果：`"remembered"` / `"familiar"` / `"forgotten"`，新词未复习前为 `null` |
 | `last_feedback_at` | `TEXT` | `string \| null` | 否 | 最近一次按下按钮的时间 `YYYY-MM-DDTHH:mm:ss+08:00`，新词未复习前为 `null` |
 | `paused` | `INTEGER` | `boolean` | 是 | 是否暂停复习：库中存 `0`（正常）或 `1`（暂停）；`paused = 1` 的词不出现在每日复习中 |
+
+#### 相关词（只展示）
+
+现有数据库通过 `migrations/0002_add_related_words.sql` 加列，必须在上线读取新列的代码之前执行；不修改既有 `0001`。此处建表 SQL 描述的是迁移完成后的结构。
+
+数据库存 `related_words_json` JSON 字符串；`formatWordCardForToday` 解析后以 `related_words` 数组经 `/api/today` 返回。每项只返回五个非空字符串字段：
+
+- `english`：相关词或短语；`ipa`：美式 IPA，多音节标重音（单音节通常不另标）。
+- `pos`：词性或 `phr.`；`zh`：简短中文义；`relation`：相对当前词的关系，例如 `衍生` / `反义` / `近义` / `搭配`。
+
+内容目标为每词 3～6 项，优先准确自然，不硬凑、不在读取时补词。原顺序保留。字段缺失、null、非法 JSON、非数组，或任一项缺少有效字段时，整组降级为 `[]`，不影响复习。接口新增字段为兼容性扩展，维持 `schema_version: 2`。
+
+前端翻开后在备注之后、示例之前展示，空列表不显示。相关词不自动生成复习卡，也不写入 `review_logs`。
 
 #### 单词条目完整 JSON 示例（含 3～5 条例句）
 ```json

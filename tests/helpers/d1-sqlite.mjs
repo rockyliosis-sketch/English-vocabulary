@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const MIGRATION_PATH = path.resolve(__dirname, '../../migrations/0001_init.sql');
+const MIGRATIONS_DIR = path.resolve(__dirname, '../../migrations');
 
 class BoundD1Statement {
   constructor(sqlite, sql, params = []) {
@@ -79,7 +79,8 @@ export class LocalD1Database {
 
 export function createTestD1WithMigration() {
   const db = new LocalD1Database(':memory:');
-  const migrationSql = fs.readFileSync(MIGRATION_PATH, 'utf-8');
-  db.exec(migrationSql);
+  for (const filename of fs.readdirSync(MIGRATIONS_DIR).filter((name) => /^\d+.*\.sql$/.test(name)).sort()) {
+    db.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, filename), 'utf-8'));
+  }
   return db;
 }

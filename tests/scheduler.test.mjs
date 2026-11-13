@@ -13,6 +13,7 @@ import {
   resolveBaseStateForDay,
   computeReviewTransition,
   selectDailyExample,
+  parseRelatedWordsList,
   formatWordCardForToday
 } from '../functions/_lib/scheduler.js';
 
@@ -282,4 +283,22 @@ test('Context filtering falls back for an empty pool and ignores absent context 
   ];
   assert.equal(choose(different, 'A silver kite').total, 2);
   assert.equal(choose(same, '银色风筝。').total, 2); // compare English only
+});
+
+
+test('Optional related words are normalized, display-only, and fail closed for malformed data', () => {
+  const related = { english: ' glimmering ', ipa: ' /ˈɡlɪmərɪŋ/ ', pos: ' adj. ', zh: ' 微亮的 ', relation: ' 衍生 ', extra: 'ignored' };
+  assert.deepEqual(parseRelatedWordsList(JSON.stringify([related])), [{
+    english: 'glimmering', ipa: '/ˈɡlɪmərɪŋ/', pos: 'adj.', zh: '微亮的', relation: '衍生'
+  }]);
+  for (const invalid of [undefined, null, '', '{bad', '{}', 'null', 42, [null], [related, {}], [{ ...related, ipa: ' ' }]]) {
+    assert.deepEqual(parseRelatedWordsList(invalid), []);
+  }
+  const word = { id: 'fictional-related', english: 'glimmer', ipa: '/ˈɡlɪmər/', pos: 'n.',
+    chinese_sense: '微光', stage: 2, next_review_date: '2026-11-13',
+    examples_json: '[{"en":"A made-up lantern glimmers.","zh":"虚构的灯闪烁。"}]' };
+  const baseline = formatWordCardForToday({ word, today: '2026-11-13' });
+  const withRelated = formatWordCardForToday({ word: { ...word, related_words_json: JSON.stringify([related]) }, today: '2026-11-13' });
+  assert.equal(withRelated.related_words.length, 1);
+  assert.deepEqual({ ...withRelated, related_words: [] }, baseline);
 });

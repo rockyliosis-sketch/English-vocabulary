@@ -244,6 +244,22 @@ export function parseExamplesList(examplesOrJson) {
   });
 }
 
+/** Optional display data must never prevent a review session from loading. */
+export function parseRelatedWordsList(value) {
+  try {
+    const list = typeof value === 'string' ? JSON.parse(value) : value;
+    if (!Array.isArray(list)) return [];
+    const fields = ['english', 'ipa', 'pos', 'zh', 'relation'];
+    if (list.some((item) => !item || typeof item !== 'object' ||
+      fields.some((key) => typeof item[key] !== 'string' || !item[key].trim()))) {
+      return [];
+    }
+    return list.map((item) => Object.fromEntries(fields.map((key) => [key, item[key].trim()])));
+  } catch {
+    return [];
+  }
+}
+
 /** Comparison only: preserve displayed text and internal punctuation. */
 export function normalizeExampleText(value) {
   return typeof value === 'string'
@@ -331,6 +347,9 @@ export function formatWordCardForToday({
     original_context: rawContext || MISSING_CONTEXT_TEXT,
     has_original_context: Boolean(rawContext),
     usage_notes: rawNotes || MISSING_NOTES_TEXT,
+    related_words: parseRelatedWordsList(
+      word.related_words !== undefined ? word.related_words : word.related_words_json
+    ),
     example: {
       label: EXAMPLE_LABEL,
       en: example.en,

@@ -261,3 +261,30 @@ test('14-word seed, LEFT JOIN morning count, GET /api/today, and POST /api/revie
   });
   assert.equal(postPaused.status, 409);
 });
+
+test('Related words migrate with an empty default, flow through today API, and create no review cards', async () => {
+  const db = createTestD1WithMigration();
+  try {
+    const insert = db.sqlite.prepare(`INSERT INTO words
+      (id, english, ipa, pos, chinese_sense, examples_json, added_at, next_review_date)
+      VALUES (?, 'glimmer', '/ˈɡlɪmər/', 'n.', '微光', ?, '2026-11-12T09:00:00+08:00', '2026-11-13')`);
+    const examples = '[{"en":"A fictional beacon glimmers.","zh":"虚构的灯塔闪光。"}]';
+    for (const id of ['fictional-related', 'fictional-empty', 'fictional-bad']) insert.run(id, examples);
+    assert.equal(db.sqlite.prepare('SELECT related_words_json FROM words WHERE id = ?').get('fictional-empty').related_words_json, '[]');
+    const related = [{ english: 'glimmering', ipa: '/ˈɡlɪmərɪŋ/', pos: 'adj.', zh: '微亮的', relation: '衍生' }];
+    db.sqlite.prepare('UPDATE words SET related_words_json = ? WHERE id = ?').run(JSON.stringify(related), 'fictional-related');
+    db.sqlite.prepare('UPDATE words SET related_words_json = ? WHERE id = ?').run('broken json', 'fictional-bad');
+    const response = await getTodayHandler({ request: new Request('https://vocab.example.com/api/today?date=2026-11-13'), env: { VOCAB_DB: db } });
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.cards.length, 3);
+    assert.equal(body.stats.total_due_today, 3);
+    assert.deepEqual(body.cards.find((c) => c.id === 'fictional-related').related_words, related);
+    assert.deepEqual(body.cards.find((c) => c.id === 'fictional-empty').related_words, []);
+    assert.deepEqual(body.cards.find((c) => c.id === 'fictional-bad').related_words, []);
+    assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM words').get().n, 3);
+    assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM review_logs').get().n, 0);
+  } finally {
+    db.sqlite.close();
+  }
+});
