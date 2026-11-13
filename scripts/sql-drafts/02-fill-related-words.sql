@@ -3,7 +3,9 @@
 -- 只动 words.related_words_json；不动其它字段和 review_logs，不创建复习卡。
 -- 必须先应用 migrations/0002_add_related_words.sql，再考虑本草稿。
 -- 每项含美式 IPA（多音节标重音，单音节通常不另标）、词性、简短中文及关系。
--- 近义/反义仅对应相关义项；搭配和同词族不表示可以直接替换。请 Rocky 审核词义和音标。
+-- 117 项已逐项复核；近义/反义按当前义项限定，搭配/同词族不表示可以直接替换。
+-- IPA 使用美式宽式音标：省略长音号；保留 r 或 ɝ；不强制把有效美式变体统一成一种。
+-- 复核依据与修正清单见 docs/交接 - 示例去重与相关词 - 2026-11-13.md；仍待 Rocky 审。
 -- 线上 D1 才是准；仅当 id 匹配且旧值严格等于文本 '[]' 时写入。
 -- NULL、空串、带空白的 '[ ]' 和非空内容均跳过；重复执行不覆盖已填内容。
 -- 不得纳入自动迁移；本轮未执行线上或本地持久库写入。
@@ -39,9 +41,9 @@ WHERE id = 'particular-adj-1' AND related_words_json = '[]';
 -- variety (noun)
 UPDATE words
 SET related_words_json = '[
-  {"english": "various", "ipa": "/ˈvɛriəs/", "pos": "adj.", "zh": "各种各样的", "relation": "衍生"},
+  {"english": "various", "ipa": "/ˈvɛriəs/", "pos": "adj.", "zh": "各种各样的", "relation": "同词族"},
   {"english": "vary", "ipa": "/ˈvɛri/", "pos": "v.", "zh": "变化；不同", "relation": "同词族"},
-  {"english": "diversity", "ipa": "/dɪˈvɝsəti/", "pos": "n.", "zh": "多样性", "relation": "近义"}
+  {"english": "diversity", "ipa": "/dɪˈvɝsəti/", "pos": "n.", "zh": "多样性", "relation": "相关"}
 ]'
 WHERE id = 'variety-n-1' AND related_words_json = '[]';
 
@@ -147,7 +149,7 @@ WHERE id = 'scope-n-1' AND related_words_json = '[]';
 -- range (noun)
 UPDATE words
 SET related_words_json = '[
-  {"english": "wide-ranging", "ipa": "/ˌwaɪdˈreɪndʒɪŋ/", "pos": "adj.", "zh": "范围广泛的", "relation": "衍生"},
+  {"english": "wide-ranging", "ipa": "/ˌwaɪdˈreɪndʒɪŋ/", "pos": "adj.", "zh": "范围广泛的", "relation": "复合词"},
   {"english": "spectrum", "ipa": "/ˈspɛktrəm/", "pos": "n.", "zh": "范围；系列", "relation": "近义"},
   {"english": "range of options", "ipa": "/ˌreɪndʒ əv ˈɑpʃənz/", "pos": "n.", "zh": "一系列选项", "relation": "搭配"}
 ]'
@@ -166,8 +168,8 @@ WHERE id = 'analyze-v-1' AND related_words_json = '[]';
 UPDATE words
 SET related_words_json = '[
   {"english": "incredibly", "ipa": "/ɪnˈkrɛdəbli/", "pos": "adv.", "zh": "难以置信地；极其", "relation": "衍生"},
-  {"english": "credible", "ipa": "/ˈkrɛdəbəl/", "pos": "adj.", "zh": "可信的", "relation": "反义"},
-  {"english": "amazing", "ipa": "/əˈmeɪzɪŋ/", "pos": "adj.", "zh": "惊人的；极好的", "relation": "近义"}
+  {"english": "credible", "ipa": "/ˈkrɛdəbəl/", "pos": "adj.", "zh": "可信的", "relation": "反义（难以置信义）"},
+  {"english": "amazing", "ipa": "/əˈmeɪzɪŋ/", "pos": "adj.", "zh": "惊人的；极好的", "relation": "近义（极好义）"}
 ]'
 WHERE id = 'incredible-adj-1' AND related_words_json = '[]';
 
@@ -239,7 +241,7 @@ UPDATE words
 SET related_words_json = '[
   {"english": "separate", "ipa": "/ˈsɛpəreɪt/", "pos": "v.", "zh": "分开；分离", "relation": "同词族"},
   {"english": "separately", "ipa": "/ˈsɛpərətli/", "pos": "adv.", "zh": "分开地", "relation": "同词族"},
-  {"english": "reunion", "ipa": "/riˈunjən/", "pos": "n.", "zh": "重聚；团聚", "relation": "反义"}
+  {"english": "reunion", "ipa": "/ˌriˈjunjən/", "pos": "n.", "zh": "重聚；团聚", "relation": "反义（分离义）"}
 ]'
 WHERE id = 'separation-n-1' AND related_words_json = '[]';
 
@@ -283,7 +285,7 @@ WHERE id = 'replace-v-1' AND related_words_json = '[]';
 UPDATE words
 SET related_words_json = '[
   {"english": "practical", "ipa": "/ˈpræktɪkəl/", "pos": "adj.", "zh": "实际的；实用的", "relation": "同词族"},
-  {"english": "virtually", "ipa": "/ˈvɝtʃuəli/", "pos": "adv.", "zh": "几乎；实际上", "relation": "近义"},
+  {"english": "virtually", "ipa": "/ˈvɝtʃuəli/", "pos": "adv.", "zh": "几乎", "relation": "近义"},
   {"english": "almost", "ipa": "/ˈɔlmoʊst/", "pos": "adv.", "zh": "几乎", "relation": "近义"}
 ]'
 WHERE id = 'practically-adv-1' AND related_words_json = '[]';
@@ -292,7 +294,7 @@ WHERE id = 'practically-adv-1' AND related_words_json = '[]';
 UPDATE words
 SET related_words_json = '[
   {"english": "rank", "ipa": "/ræŋk/", "pos": "n./v.", "zh": "名次；排名", "relation": "同词族"},
-  {"english": "top-ranked", "ipa": "/ˌtɑpˈræŋkt/", "pos": "adj.", "zh": "排名最高的", "relation": "衍生"},
+  {"english": "top-ranked", "ipa": "/ˌtɑpˈræŋkt/", "pos": "adj.", "zh": "名列前茅的", "relation": "复合词"},
   {"english": "ranking system", "ipa": "/ˈræŋkɪŋ ˌsɪstəm/", "pos": "n.", "zh": "排名制度", "relation": "搭配"}
 ]'
 WHERE id = 'ranking-n-1' AND related_words_json = '[]';
@@ -338,7 +340,7 @@ UPDATE words
 SET related_words_json = '[
   {"english": "responsibility", "ipa": "/rɪˌspɑnsəˈbɪləti/", "pos": "n.", "zh": "责任；职责", "relation": "衍生"},
   {"english": "irresponsible", "ipa": "/ˌɪrɪˈspɑnsəbəl/", "pos": "adj.", "zh": "不负责任的", "relation": "反义"},
-  {"english": "accountable", "ipa": "/əˈkaʊntəbəl/", "pos": "adj.", "zh": "负有责任的", "relation": "近义"}
+  {"english": "accountable", "ipa": "/əˈkaʊntəbəl/", "pos": "adj.", "zh": "须负责的", "relation": "近义"}
 ]'
 WHERE id = 'responsible-adj-1' AND related_words_json = '[]';
 
