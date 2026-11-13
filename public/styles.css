@@ -757,3 +757,62 @@ body {
     font-size: 1.18rem;
   }
 }
+
+
+/* Related words follow notes and stay readable in the available back-panel width. */
+.card-back,
+.related-words,
+.related-word {
+  min-width: 0;
+}
+
+.related-words-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 10px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.related-word {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-subtle);
+  overflow-wrap: anywhere;
+}
+
+.related-word-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.related-word-english {
+  font-size: 1.06rem;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+.related-word-relation {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.related-word-pronunciation,
+.related-word-meaning {
+  margin: 4px 0 0;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+@media (min-width: 768px) {
+  .related-words-list { gap: 12px; }
+  .related-word { padding: 14px 16px; }
+  .related-word-english { font-size: 1.15rem; }
+  .related-word-pronunciation,
+  .related-word-meaning { font-size: 1.06rem; }
+}

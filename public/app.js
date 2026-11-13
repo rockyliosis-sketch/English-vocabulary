@@ -205,6 +205,8 @@ export function createFlashcardApp(doc = document, win = window) {
     wordChinese: doc.getElementById('word-chinese'),
     wordContext: doc.getElementById('word-context'),
     wordNotes: doc.getElementById('word-notes'),
+    relatedWordsSection: doc.getElementById('related-words-section'),
+    relatedWordsList: doc.getElementById('related-words-list'),
     exampleLabel: doc.getElementById('example-label'),
     exampleEn: doc.getElementById('example-en'),
     exampleZh: doc.getElementById('example-zh'),
@@ -304,7 +306,7 @@ export function createFlashcardApp(doc = document, win = window) {
       els.todayGradedBadge.hidden = true;
     }
 
-    // 背面内容：中文意思、原场景（无则显示“原场景未提供”）、辨析注解、标“示例”的例句
+    // 背面内容：中文意思、原场景（无则显示“原场景未提供”）、辨析注解、相关词、标“示例”的例句
     els.wordChinese.textContent = card.chinese_sense || '';
 
     const rawContext = typeof card.original_context === 'string' ? card.original_context.trim() : '';
@@ -314,6 +316,36 @@ export function createFlashcardApp(doc = document, win = window) {
 
     const rawNotes = typeof card.usage_notes === 'string' ? card.usage_notes.trim() : '';
     els.wordNotes.textContent = rawNotes || MISSING_NOTES_TEXT;
+
+    // Text nodes keep optional vocabulary content inert and clear the previous card.
+    els.relatedWordsList.replaceChildren();
+    const fields = ['english', 'ipa', 'pos', 'zh', 'relation'];
+    const related = Array.isArray(card.related_words) && card.related_words.every((item) =>
+      item && fields.every((key) => typeof item[key] === 'string' && item[key].trim())
+    ) ? card.related_words : [];
+    for (const item of related) {
+      const row = doc.createElement('li');
+      row.className = 'related-word';
+      const heading = doc.createElement('div');
+      heading.className = 'related-word-heading';
+      for (const [key, className] of [['english', 'related-word-english'], ['relation', 'related-word-relation']]) {
+        const span = doc.createElement('span');
+        span.className = className;
+        span.textContent = item[key];
+        if (key === 'english') span.lang = 'en';
+        heading.append(span);
+      }
+      const pronunciation = doc.createElement('p');
+      pronunciation.className = 'related-word-pronunciation';
+      pronunciation.lang = 'en';
+      pronunciation.textContent = `${item.ipa} · ${item.pos}`;
+      const meaning = doc.createElement('p');
+      meaning.className = 'related-word-meaning';
+      meaning.textContent = item.zh;
+      row.append(heading, pronunciation, meaning);
+      els.relatedWordsList.append(row);
+    }
+    els.relatedWordsSection.hidden = !state.isRevealed || related.length === 0;
 
     els.exampleLabel.textContent = card.example?.label || EXAMPLE_LABEL;
     els.exampleEn.textContent = card.example?.en || '';

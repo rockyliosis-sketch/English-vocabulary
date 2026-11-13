@@ -57,7 +57,7 @@
             <p id="flip-hint" class="flip-hint">点击卡片翻开释义、原场景与例句</p>
           </div>
 
-          <!-- 背面：翻开后才显示中文意思、原场景、辨析、示例例句 -->
+          <!-- 背面：翻开后才显示中文意思、原场景、辨析、相关词、示例例句 -->
           <div id="card-back" class="card-back" hidden>
             <hr class="card-divider" />
 
@@ -77,6 +77,11 @@
                 <p id="word-notes" class="field-content"></p>
               </div>
             </div>
+
+            <section id="related-words-section" class="field-block related-words" aria-labelledby="related-words-label" hidden>
+              <h2 id="related-words-label" class="field-label">相关词</h2>
+              <ul id="related-words-list" class="related-words-list"></ul>
+            </section>
 
             <div id="word-example-box" class="field-block example-box">
               <div class="example-header">

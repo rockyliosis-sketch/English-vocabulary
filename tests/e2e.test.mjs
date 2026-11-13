@@ -36,6 +36,7 @@ class MockElement {
     this.attrs = { ...attrs };
     this.classList = new MockClassList();
     this.listeners = new Map();
+    this.children = [];
   }
   getAttribute(name) {
     return this.attrs[name] ?? null;
@@ -53,6 +54,8 @@ class MockElement {
       fn({ preventDefault() {}, stopPropagation() {} });
     }
   }
+  append(...nodes) { this.children.push(...nodes); }
+  replaceChildren(...nodes) { this.children = [...nodes]; }
   focus() {}
   select() {}
 }
@@ -79,6 +82,8 @@ function createMockDomAndWindow(db, queryDate = '2026-11-10') {
     ['word-chinese', new MockElement('word-chinese')],
     ['word-context', new MockElement('word-context')],
     ['word-notes', new MockElement('word-notes')],
+    ['related-words-section', new MockElement('related-words-section', { hidden: true })],
+    ['related-words-list', new MockElement('related-words-list')],
     ['example-label', new MockElement('example-label')],
     ['example-en', new MockElement('example-en')],
     ['example-zh', new MockElement('example-zh')],
@@ -100,6 +105,7 @@ function createMockDomAndWindow(db, queryDate = '2026-11-10') {
   let clipboardText = '';
 
   const doc = {
+    createElement(tag) { return new MockElement(tag); },
     getElementById(id) {
       return elements.get(id) || null;
     },
@@ -399,4 +405,48 @@ test('Responsive styles cover iPhone 17 Pro Max safe-area insets (440x956) and 1
   assert.match(css, /@media\s*\(min-width:\s*1180px\)/);
   assert.match(css, /max-width:\s*1080px/);
   assert.match(css, /grid-template-columns:\s*310px\s+minmax\(0,\s*1fr\)/);
+});
+
+
+test('Related words reveal after notes, render as text, and clear when switching to empty or malformed cards', async () => {
+  const db = createTestD1WithMigration();
+  try {
+    const html = fs.readFileSync(path.resolve(__dirname, '../public/index.html'), 'utf-8');
+    assert.ok(html.indexOf('id="word-notes"') < html.indexOf('id="related-words-section"'));
+    assert.ok(html.indexOf('id="related-words-section"') < html.indexOf('id="word-example-box"'));
+    const related = [{ english: '<img src=x onerror=alert(1)>', ipa: '/ˈɡlɪmərɪŋ/', pos: 'adj.', zh: '测试文本', relation: '衍生' }];
+    const insert = db.sqlite.prepare(`INSERT INTO words (id, english, ipa, pos, chinese_sense,
+      examples_json, related_words_json, added_at, next_review_date)
+      VALUES (?, 'glimmer', '/ˈɡlɪmər/', 'n.', '微光', ?, ?, '2026-11-09T09:00:00+08:00', '2026-11-10')`);
+    for (const [id, data] of [['fictional-a', JSON.stringify(related)], ['fictional-b', '[]'], ['fictional-c', 'broken']]) {
+      insert.run(id, '[{"en":"A fictional lantern shines.","zh":"虚构的灯亮着。"}]', data);
+    }
+    const { doc, win, elements } = createMockDomAndWindow(db);
+    const app = createFlashcardApp(doc, win);
+    await app.init();
+    const section = elements.get('related-words-section');
+    const list = elements.get('related-words-list');
+    assert.equal(section.hidden, true);
+    app.revealCard();
+    assert.equal(section.hidden, false);
+    assert.equal(list.children.length, 1);
+    const row = list.children[0];
+    assert.equal(row.children[0].children[0].textContent, related[0].english);
+    assert.equal(row.children[0].children[0].innerHTML, '');
+    assert.equal(row.children[1].textContent, '/ˈɡlɪmərɪŋ/ · adj.');
+    assert.equal(row.children[2].textContent, '测试文本');
+    await app.handleGradeClick('remembered');
+    assert.equal(section.hidden, true);
+    assert.equal(list.children.length, 0);
+    app.revealCard();
+    assert.equal(section.hidden, true);
+    await app.handleGradeClick('familiar');
+    app.revealCard();
+    assert.equal(section.hidden, true);
+    assert.equal(list.children.length, 0);
+    assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM words').get().n, 3);
+    assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM review_logs').get().n, 2);
+  } finally {
+    db.sqlite.close();
+  }
 });
