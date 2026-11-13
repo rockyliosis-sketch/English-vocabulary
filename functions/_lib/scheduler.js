@@ -244,6 +244,13 @@ export function parseExamplesList(examplesOrJson) {
   });
 }
 
+/** Comparison only: preserve displayed text and internal punctuation. */
+export function normalizeExampleText(value) {
+  return typeof value === 'string'
+    ? value.trim().replace(/\s+/gu, ' ').toLowerCase().replace(/[\p{P}\s]+$/gu, '')
+    : '';
+}
+
 /**
  * Deterministically selects today's rotated example sentence for a word.
  *
@@ -256,11 +263,17 @@ export function parseExamplesList(examplesOrJson) {
  */
 export function selectDailyExample({
   examples,
+  originalContext = null,
   pastReviewDays = 0,
   dueDateBeforeToday,
   today
 }) {
   const parsedExamples = parseExamplesList(examples);
+  const context = normalizeExampleText(originalContext);
+  const filtered = context
+    ? parsedExamples.filter((item) => normalizeExampleText(item.en) !== context)
+    : parsedExamples;
+  const candidates = filtered.length ? filtered : parsedExamples;
   if (!Number.isInteger(pastReviewDays) || pastReviewDays < 0) {
     throw new Error(`pastReviewDays must be a non-negative integer, got: ${String(pastReviewDays)}`);
   }
@@ -272,12 +285,12 @@ export function selectDailyExample({
   }
 
   const overdueDays = Math.max(0, diffDays(dueDateBeforeToday, today));
-  const index = (pastReviewDays + overdueDays) % parsedExamples.length;
-  const chosen = parsedExamples[index];
+  const index = (pastReviewDays + overdueDays) % candidates.length;
+  const chosen = candidates[index];
 
   return {
     index,
-    total: parsedExamples.length,
+    total: candidates.length,
     overdueDays,
     pastReviewDays,
     label: EXAMPLE_LABEL,
@@ -303,6 +316,7 @@ export function formatWordCardForToday({
   const rawExamples = word.examples !== undefined ? word.examples : word.examples_json;
   const example = selectDailyExample({
     examples: rawExamples,
+    originalContext: rawContext,
     pastReviewDays,
     dueDateBeforeToday: baseState.nextReviewDateBefore,
     today

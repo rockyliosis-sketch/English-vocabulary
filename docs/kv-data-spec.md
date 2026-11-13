@@ -125,16 +125,20 @@ CREATE INDEX IF NOT EXISTS idx_review_logs_date
 ```
 > 注：写入 D1 `words.examples_json` 列时，将上述 `examples` 数组序列化为 JSON 字符串即可。
 
-#### 网站每日例句轮换规则（保证跨复习日必换、同日按完刷新绝不跳句）
-设单词共有 $N$ 条例句（$3 \le N \le 5$）：
+#### 网站每日例句轮换规则（候选池不变时，同日按完刷新不跳句）
+先对每条例句 `en` 与 `original_context` 做比较用归一化：去首尾空白、将连续空白合并为一个空格、转小写、移除末尾 Unicode 标点（及其间空白）。内部标点不变，不做模糊匹配；原文展示不受影响。
+
+按原顺序过滤与非空原场景相同的例句；全部被过滤时回退完整列表。原场景为空时使用完整列表。设实际候选池有 $N$ 条例句（$N \ge 1$），返回的 `example.index`（从 0 开始）和 `example.total` 都基于此候选池：
 - `past_review_days`：该词在今天之前已发生过的有效复习天数（`SELECT COUNT(*) FROM review_logs WHERE word_id = ? AND review_date < today`，严格小于 `today`，不含今天当天的记录）；
 - `due_date_before_today`：**当天第一次按之前的下次复习日期**，即优先取今日 `review_logs.next_review_date_before`（若今天尚未按过则取 `words.next_review_date`，等价于 `COALESCE(r.next_review_date_before, w.next_review_date)`）；
 - `overdue_days = max(0, today - due_date_before_today)`。
 
 则今天展示的例句下标为：
 $$\text{index} = (\text{past\_review\_days} + \text{overdue\_days}) \bmod N$$
-- **为什么同日按完按钮再刷新绝不会跳到另一句**：按完按钮后虽然 `words.next_review_date` 改成了未来日期，但今日 `review_logs.next_review_date_before` 锁死了今天第一次按之前的到期日，且 `past_review_days` 只统计 `< today` 的历史，因此 `overdue_days` 与 `past_review_days` 全天恒定不变。
+- **为什么候选池不变时同日按完按钮再刷新不会跳到另一句**：按完按钮后虽然 `words.next_review_date` 改成了未来日期，但今日 `review_logs.next_review_date_before` 锁死了今天第一次按之前的到期日，且 `past_review_days` 只统计 `< today` 的历史，因此 `overdue_days` 与 `past_review_days` 全天恒定不变。
 - **为什么不用“当前日期 mod $N$”**：因为间隔阶梯里有 `3` 天、`30` 天、`60` 天，若 $N=3$ 且按日期取模，隔 3 天、30 天或 60 天回来复习时余数相同，会永远看到同一条例句。
+
+例句池或原场景在当天被编辑时，候选池可能变化，展示也可能随之变化。不承诺跨复习日必换：只剩一条例句时必然重复，逾期天数变化也可能产生相同余数。新增例句建议仍为 3～5 条；清理后数据库至少保留 1 条。
 
 ---
 

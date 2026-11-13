@@ -224,3 +224,62 @@ test('Daily example rotation stays 100% stable within the same day before and af
   assert.equal(nextSessionEx.index, 2);
   assert.equal(nextSessionEx.en, 'Example sentence 3.');
 });
+
+test('Shared context is excluded independently for three fictional cards and remains stable after re-grading', () => {
+  const today = '2026-11-13';
+  for (const [i, english] of ['glimmer', 'briskly', 'mossy'].entries()) {
+    const examples = [
+      { en: '  A LANTERN\t lights\n the path?!  ', zh: '一盏灯照着小路。' },
+      { en: `Fictional alternate ${i}A.`, zh: '虚构示例甲。' },
+      { en: 'A lantern lights the path…', zh: '同场景另一版本。' },
+      { en: `Fictional alternate ${i}B.`, zh: '虚构示例乙。' }
+    ];
+    const original = JSON.stringify(examples);
+    const word = {
+      id: `fictional-${i}`, english, ipa: '/test/', pos: 'adj.', chinese_sense: '测试',
+      original_context: 'A lantern lights the path.', examples_json: original,
+      stage: 1, next_review_date: today
+    };
+    const before = formatWordCardForToday({ word, today, pastReviewDays: 0 });
+    assert.equal(before.example.en, `Fictional alternate ${i}A.`);
+    assert.equal(before.example.index, 0);
+    assert.equal(before.example.total, 2);
+    assert.deepEqual(formatWordCardForToday({ word, today }).example, before.example);
+    for (const result of ['remembered', 'familiar', 'forgotten']) {
+      const change = computeReviewTransition({ stageBefore: 1, reviewDate: today, result });
+      const after = formatWordCardForToday({
+        word: { ...word, stage: change.stageAfter, next_review_date: change.nextReviewDateAfter },
+        today, pastReviewDays: 0,
+        todayLog: { stage_before: 1, next_review_date_before: today, result }
+      });
+      assert.deepEqual(after.example, before.example);
+    }
+    const rotated = selectDailyExample({ examples, originalContext: word.original_context,
+      pastReviewDays: 2, dueDateBeforeToday: '2026-11-12', today });
+    assert.equal(rotated.index, 1); // (2 + 1) % 2
+    assert.equal(rotated.en, `Fictional alternate ${i}B.`);
+    assert.equal(JSON.stringify(examples), original);
+  }
+});
+
+test('Context filtering falls back for an empty pool and ignores absent context without fuzzy matching', () => {
+  const choose = (examples, originalContext, pastReviewDays = 0) => selectDailyExample({
+    examples, originalContext, pastReviewDays, dueDateBeforeToday: '2026-11-13', today: '2026-11-13'
+  });
+  const same = [
+    { en: 'A silver kite.', zh: '银色风筝。' },
+    { en: 'a SILVER kite！', zh: '同一句。' }
+  ];
+  assert.equal(choose(same, 'A silver kite?', 1).total, 2);
+  assert.equal(choose(same, 'A silver kite?', 1).en, same[1].en);
+  assert.equal(choose([same[0]], 'A silver kite').en, same[0].en);
+  for (const missing of [null, undefined, '', ' \n\t ']) {
+    assert.equal(choose(same, missing).total, 2);
+  }
+  const different = [
+    { en: 'A silver-kite.', zh: '内部标点保留。' },
+    { en: 'A silver kite rises.', zh: '不做包含匹配。' }
+  ];
+  assert.equal(choose(different, 'A silver kite').total, 2);
+  assert.equal(choose(same, '银色风筝。').total, 2); // compare English only
+});
