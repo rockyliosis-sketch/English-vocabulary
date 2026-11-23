@@ -42,3 +42,12 @@
 - 已逐项复核 117 个相关词，修正 9 项的 IPA、释义或关系（含 reunion 缺失的 /j/），其余 108 项保留。保留 02 的 ID + 旧值 '[]' 保护。
 - `npm test`：4 个测试文件、25 个用例全部通过（SQL 草稿 11）；测试只用虚构数据的内存 SQLite，覆盖保护条件、容量冲突、重复执行及进度/历史不变。
 - 0002 仍须先于新代码及 02；03 独立放在 sql-drafts，不进入迁移。详见 [本轮交接补充](<交接 - 示例去重与相关词 - 2026-11-13.md#补充轮规则级例句下限与-117-项相关词复核>)，包括未知线上数据的安全边界、每份 SQL 行数假设和修正清单。
+
+## 2026-11-23：任何 Agent 都能收新词（文档 + 离线导入脚本）
+
+- 本条为最新交接。分支 `feat/20261123-agent-word-intake`，从 `feat/20261113-examples-and-word-family` 的 `0fcf6ae`（2026-11-13 上线版本）开出。
+- 新增 `AGENTS.md`（通用入口）、`CLAUDE.md`（一行指向 AGENTS.md）、`docs/word-intake-rules.md`（完整收词规则与操作手册，含 D1 读行数预算和 11-13 事故教训）、`data/templates/word-entry.example.json`（indeed 真实条目）、`data/inbox/`（无写库权限时的待导入区）、`scripts/import-inbox.mjs` 与 `tests/import-inbox.test.mjs`；README 加了一节指向这些文件。
+- 导入脚本只读本地文件、不连 Cloudflare、不读密钥；每个词生成一条 `INSERT … ON CONFLICT(id) DO NOTHING`，全部 id 用一条主键 `SELECT … WHERE id IN (…) LIMIT n` 读回，估算每词约读 3 行、写 3 行。
+- 测了什么：`npm test` 5 个测试文件、30 个用例全部通过（新增 5 个，只用虚构数据的内存 SQLite）：重复执行无害、已存在卡的进度不变、读回查询的 `EXPLAIN QUERY PLAN` 为主键 `SEARCH`、没有 `SCAN`/递归 CTE/`INSERT OR REPLACE`。
+- 没有部署，没有连接或改动真实 D1，没有碰 `main`。只改文档和本地脚本，网站不需要重新部署。
+- 还剩什么：PR 等 Rocky 审；规则文档里待 Rocky 裁决的几处不一致写在 PR 描述里。
