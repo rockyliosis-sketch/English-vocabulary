@@ -1,0 +1,60 @@
+{
+  "id": "indeed-adv-1",
+  "english": "indeed",
+  "ipa": "/ɪnˈdiːd/",
+  "pos": "adverb",
+  "chinese_sense": "的确，确实；甚至（用于加强、补充）",
+  "original_context": "Indeed, I don't know why and how. We rarely get singing lessons 😂",
+  "usage_notes": "副词，用来确认、加强或补充前面已经提到的内容，不是可以随便塞进句子的语气词，也不等于口语里的「其实」。常见位置：① 句首 Indeed, ... 用来确认或补充刚说过的话，前面必须有可承接的内容，不是任何句子开头都能加。如：The hotel looks small from the street. Indeed, there are only twelve rooms.（不但同意「小」，还补上更具体的一点。）② 句中，系动词 be 之后：This is indeed the right gate.③ 助动词之后、实义动词之前：We have indeed booked a table. / She did indeed leave her passport at the front desk.④ 单独作回应：Indeed. 或 Yes, indeed. 语气偏正式，日常口语里更常说 Yes. / That's right.⑤ 句末 very ... indeed：The staff were very helpful indeed. 这是较郑重的英式强调，不是美式口语里最常见的说法。关于原句：原话保留为 “Indeed, I don't know why and how. We rarely get singing lessons 😂”。这句话是否自然，取决于前面在说什么——Indeed 需要承接前文（例如有人刚提到很少上课，或刚表示同样的困惑），不能当成随便的「其实」来用。辨析：indeed 比 really 更正式，偏「确认、加强已说的话」；really 更口语，表示「真的、非常」；actually 常常用来纠正或引出出乎意料的情况（Actually, the museum is closed today.）；in fact 用来补充或把话说得更明确（In fact, we've been here before.），不一定是在同意对方。",
+  "examples_json": [
+    {
+      "en": "The hotel looks small from the street. Indeed, there are only twelve rooms.",
+      "zh": "酒店从街上看很小。的确，一共只有十二间房。"
+    },
+    {
+      "en": "This is indeed the gate for the flight to Osaka.",
+      "zh": "这确实是飞往大阪的登机口。"
+    },
+    {
+      "en": "We have indeed booked a table for seven.",
+      "zh": "我们确实订了七点的位子。"
+    },
+    {
+      "en": "Is breakfast included? Yes, indeed. It's served until ten.",
+      "zh": "含早餐吗？是的，确实包含。供应到十点。"
+    },
+    {
+      "en": "The staff were very helpful indeed.",
+      "zh": "这里的工作人员非常热心。（偏英式、较郑重的强调）"
+    }
+  ],
+  "related_words_json": [
+    {
+      "english": "really",
+      "ipa": "/ˈrɪli/",
+      "pos": "adv.",
+      "zh": "真的，非常（更口语）",
+      "relation": "近义"
+    },
+    {
+      "english": "actually",
+      "ipa": "/ˈæktʃuəli/",
+      "pos": "adv.",
+      "zh": "实际上（常纠正或出乎意料）",
+      "relation": "易混"
+    },
+    {
+      "english": "in fact",
+      "ipa": "/ɪn ˈfækt/",
+      "pos": "phrase",
+      "zh": "事实上（补充说明）",
+      "relation": "易混"
+    }
+  ],
+  "added_at": "2026-11-17T18:47:29+08:00",
+  "stage": 0,
+  "next_review_date": "2026-11-18",
+  "last_feedback": null,
+  "last_feedback_at": null,
+  "paused": 0
+}
