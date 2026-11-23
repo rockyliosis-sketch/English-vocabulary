@@ -16,6 +16,9 @@
   - `docs/cloudflare-setup.md`：需用户批准执行的 D1 创建、14 词迁入、Pages 绑定与 Access 配置步骤
   - `docs/handoff.md`：每轮开发交接记录
 
+## 给 Agent：收新词
+任何 Agent 替 Rocky 收新词，照 [`AGENTS.md`](AGENTS.md) 和 [`docs/word-intake-rules.md`](docs/word-intake-rules.md) 做；没有 Cloudflare 写权限时放进 [`data/inbox/`](data/inbox/README.md)，由 `scripts/import-inbox.mjs` 生成导入语句。
+
 ## 本地运行测试
 ```bash
 npm test
