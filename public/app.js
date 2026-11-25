@@ -7,11 +7,217 @@ const STAGE_DAYS = Object.freeze([1, 3, 7, 14, 30, 60]);
 const MIN_STAGE = 0;
 const MAX_STAGE = 5;
 
+const TTS_LANG = 'en-US';
+const TTS_RATE = 0.9;
+export const TTS_UNSUPPORTED_MSG = '当前浏览器不支持朗读，请用 Safari 重试';
+export const TTS_FAILED_MSG = '朗读暂时不可用，不影响继续复习';
+
 const RESULT_LABELS = {
   remembered: '记住了',
   familiar: '有点熟',
   forgotten: '忘了'
 };
+
+export function getSpeakableText(value, missingSentinel = '') {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (missingSentinel && trimmed === missingSentinel) return '';
+  return trimmed;
+}
+
+export function pickEnglishVoice(voices) {
+  if (!Array.isArray(voices) || voices.length === 0) return null;
+
+  const normalized = voices
+    .filter((v) => v && typeof v.lang === 'string')
+    .map((v) => ({
+      voice: v,
+      lang: v.lang.trim().replace(/_/g, '-').toLowerCase()
+    }));
+
+  const isEnUs = (item) => item.lang === 'en-us';
+  const isEnAny = (item) => item.lang === 'en' || item.lang.startsWith('en-');
+
+  const match =
+    normalized.find((item) => isEnUs(item) && item.voice.localService && item.voice.default) ||
+    normalized.find((item) => isEnUs(item) && item.voice.localService) ||
+    normalized.find((item) => isEnUs(item)) ||
+    normalized.find((item) => isEnAny(item) && item.voice.localService) ||
+    normalized.find((item) => isEnAny(item));
+
+  return match ? match.voice : null;
+}
+
+export function createSpeechController(win, { onStateChange, onNotice } = {}) {
+  let cachedVoice = null;
+  let activeKey = null;
+  let activeUtterance = null;
+  let speechToken = 0;
+
+  function getSynth() {
+    return win?.speechSynthesis || null;
+  }
+
+  function getUtteranceCtor() {
+    return typeof win?.SpeechSynthesisUtterance === 'function'
+      ? win.SpeechSynthesisUtterance
+      : null;
+  }
+
+  function refreshVoices() {
+    const synth = getSynth();
+    if (!synth || typeof synth.getVoices !== 'function') return null;
+    try {
+      const voices = synth.getVoices();
+      const picked = pickEnglishVoice(voices);
+      if (picked) {
+        cachedVoice = picked;
+      }
+      return cachedVoice;
+    } catch {
+      return cachedVoice;
+    }
+  }
+
+  function bindVoicesChanged() {
+    const synth = getSynth();
+    if (!synth) return;
+    refreshVoices();
+    const handler = () => {
+      refreshVoices();
+    };
+    if (typeof synth.addEventListener === 'function') {
+      try {
+        synth.addEventListener('voiceschanged', handler);
+        return;
+      } catch {
+        // Fallback to property assignment below
+      }
+    }
+    if ('onvoiceschanged' in synth) {
+      try {
+        synth.onvoiceschanged = handler;
+      } catch {
+        // Ignore read-only environments
+      }
+    }
+  }
+
+  bindVoicesChanged();
+
+  function isSupported() {
+    const synth = getSynth();
+    const UtteranceCtor = getUtteranceCtor();
+    return Boolean(synth && typeof synth.speak === 'function' && UtteranceCtor);
+  }
+
+  function clearActiveState() {
+    activeKey = null;
+    activeUtterance = null;
+    onStateChange?.(null);
+  }
+
+  function stop() {
+    const synth = getSynth();
+    const shouldCancel = Boolean(activeKey || synth?.speaking || synth?.pending);
+    speechToken += 1;
+    clearActiveState();
+    if (shouldCancel && synth && typeof synth.cancel === 'function') {
+      try {
+        synth.cancel();
+      } catch {
+        // Ignore cancel failures
+      }
+    }
+  }
+
+  function speak(key, rawText, { missingSentinel = '' } = {}) {
+    const text = getSpeakableText(rawText, missingSentinel);
+    if (!text) {
+      return { ok: false, reason: 'empty' };
+    }
+
+    if (!isSupported()) {
+      onNotice?.(TTS_UNSUPPORTED_MSG);
+      return { ok: false, reason: 'unsupported' };
+    }
+
+    if (activeKey === key) {
+      stop();
+      return { ok: true, action: 'stopped' };
+    }
+
+    onNotice?.('');
+
+    const synth = getSynth();
+    const UtteranceCtor = getUtteranceCtor();
+    const wasActive = Boolean(activeKey || synth.speaking || synth.pending);
+    const token = ++speechToken;
+
+    if (wasActive && typeof synth.cancel === 'function') {
+      try {
+        synth.cancel();
+      } catch {
+        // Ignore cancel errors before starting the new utterance
+      }
+    }
+
+    if (!cachedVoice) {
+      refreshVoices();
+    }
+
+    try {
+      const utterance = new UtteranceCtor(text);
+      utterance.lang = TTS_LANG;
+      utterance.rate = TTS_RATE;
+      if (cachedVoice) {
+        utterance.voice = cachedVoice;
+      }
+
+      utterance.onend = () => {
+        if (token !== speechToken) return;
+        clearActiveState();
+      };
+
+      utterance.onerror = (ev) => {
+        if (token !== speechToken) return;
+        clearActiveState();
+        const errCode = ev?.error;
+        if (errCode !== 'canceled' && errCode !== 'interrupted') {
+          onNotice?.(TTS_FAILED_MSG);
+        }
+      };
+
+      activeKey = key;
+      activeUtterance = utterance;
+      onStateChange?.(key);
+      synth.speak(utterance);
+
+      return {
+        ok: true,
+        action: 'speaking',
+        text,
+        lang: utterance.lang,
+        rate: utterance.rate,
+        voice: utterance.voice || null
+      };
+    } catch {
+      clearActiveState();
+      onNotice?.(TTS_FAILED_MSG);
+      return { ok: false, reason: 'error' };
+    }
+  }
+
+  return {
+    isSupported,
+    getActiveKey: () => activeKey,
+    getCachedVoice: () => cachedVoice,
+    refreshVoices,
+    speak,
+    stop
+  };
+}
 
 function pad2(n) {
   return String(n).padStart(2, '0');
@@ -194,20 +400,24 @@ export function createFlashcardApp(doc = document, win = window) {
     emptyView: doc.getElementById('empty-view'),
     cardView: doc.getElementById('card-view'),
     doneView: doc.getElementById('done-view'),
+    ttsNotice: doc.getElementById('tts-notice'),
     flashcard: doc.getElementById('flashcard'),
     cardFront: doc.getElementById('card-front'),
     cardBack: doc.getElementById('card-back'),
     wordPos: doc.getElementById('word-pos'),
     todayGradedBadge: doc.getElementById('today-graded-badge'),
     wordEnglish: doc.getElementById('word-english'),
+    btnSpeakWord: doc.getElementById('btn-speak-word'),
     wordIpa: doc.getElementById('word-ipa'),
     flipHint: doc.getElementById('flip-hint'),
     wordChinese: doc.getElementById('word-chinese'),
     wordContext: doc.getElementById('word-context'),
+    btnSpeakContext: doc.getElementById('btn-speak-context'),
     wordNotes: doc.getElementById('word-notes'),
     relatedWordsSection: doc.getElementById('related-words-section'),
     relatedWordsList: doc.getElementById('related-words-list'),
     exampleLabel: doc.getElementById('example-label'),
+    btnSpeakExample: doc.getElementById('btn-speak-example'),
     exampleEn: doc.getElementById('example-en'),
     exampleZh: doc.getElementById('example-zh'),
     actionBar: doc.getElementById('action-bar'),
@@ -233,6 +443,40 @@ export function createFlashcardApp(doc = document, win = window) {
     receiptsMap: new Map(), // 仅存已成功写入 D1 的确认记录
     pendingRetriesMap: new Map() // 仅存 POST /api/review 失败的“待重试”记录（绝不算进已完成）
   };
+
+  function showTtsNotice(msg) {
+    if (!els.ttsNotice) return;
+    if (!msg) {
+      els.ttsNotice.hidden = true;
+      els.ttsNotice.textContent = '';
+      return;
+    }
+    els.ttsNotice.textContent = msg;
+    els.ttsNotice.hidden = false;
+  }
+
+  function updateSpeakUi(activeKey) {
+    const pairs = [
+      ['word', els.btnSpeakWord, els.wordEnglish],
+      ['context', els.btnSpeakContext, els.wordContext],
+      ['example', els.btnSpeakExample, els.exampleEn]
+    ];
+    for (const [key, btn, textEl] of pairs) {
+      const isSpeaking = activeKey === key;
+      if (btn) {
+        btn.classList.toggle('is-speaking', isSpeaking);
+        btn.setAttribute('aria-pressed', isSpeaking ? 'true' : 'false');
+      }
+      if (textEl) {
+        textEl.classList.toggle('is-speaking', isSpeaking);
+      }
+    }
+  }
+
+  const tts = createSpeechController(win, {
+    onStateChange: updateSpeakUi,
+    onNotice: showTtsNotice
+  });
 
   function isCardSyncedAndComplete(card) {
     if (!card) return false;
@@ -262,6 +506,8 @@ export function createFlashcardApp(doc = document, win = window) {
   function renderCurrentCard() {
     const total = state.cards.length;
     if (total === 0) {
+      tts.stop();
+      showTtsNotice('');
       els.progressText.textContent = '0 / 0';
       els.btnPrevCard.hidden = true;
       showOnlyView(els.emptyView);
@@ -287,7 +533,12 @@ export function createFlashcardApp(doc = document, win = window) {
     els.btnPrevCard.hidden = state.currentIndex <= 0;
 
     // 正面内容：英文、带重音音标、词性
+    const wordText = getSpeakableText(card.english);
     els.wordEnglish.textContent = card.english || '';
+    if (els.btnSpeakWord) {
+      els.btnSpeakWord.hidden = !wordText;
+      els.btnSpeakWord.setAttribute('aria-label', wordText ? `朗读单词 ${wordText}` : '朗读单词');
+    }
     els.wordIpa.textContent = card.ipa || '';
     els.wordPos.textContent = card.pos || '';
 
@@ -309,10 +560,14 @@ export function createFlashcardApp(doc = document, win = window) {
     // 背面内容：中文意思、原场景（无则显示“原场景未提供”）、辨析注解、相关词、标“示例”的例句
     els.wordChinese.textContent = card.chinese_sense || '';
 
-    const rawContext = typeof card.original_context === 'string' ? card.original_context.trim() : '';
+    const rawContext = getSpeakableText(card.original_context, MISSING_CONTEXT_TEXT);
     const contextText = rawContext || MISSING_CONTEXT_TEXT;
     els.wordContext.textContent = contextText;
-    els.wordContext.classList.toggle('is-missing', contextText === MISSING_CONTEXT_TEXT);
+    els.wordContext.classList.toggle('is-missing', !rawContext);
+    els.wordContext.classList.toggle('speakable-text', Boolean(rawContext));
+    if (els.btnSpeakContext) {
+      els.btnSpeakContext.hidden = !rawContext;
+    }
 
     const rawNotes = typeof card.usage_notes === 'string' ? card.usage_notes.trim() : '';
     els.wordNotes.textContent = rawNotes || MISSING_NOTES_TEXT;
@@ -347,8 +602,13 @@ export function createFlashcardApp(doc = document, win = window) {
     }
     els.relatedWordsSection.hidden = !state.isRevealed || related.length === 0;
 
+    const exampleEnText = getSpeakableText(card.example?.en);
     els.exampleLabel.textContent = card.example?.label || EXAMPLE_LABEL;
     els.exampleEn.textContent = card.example?.en || '';
+    els.exampleEn.classList.toggle('speakable-text', Boolean(exampleEnText));
+    if (els.btnSpeakExample) {
+      els.btnSpeakExample.hidden = !exampleEnText;
+    }
     els.exampleZh.textContent = card.example?.zh || '';
 
     // 翻面与底部三按钮显隐控制：未翻开前必须隐藏背面与三个按钮
@@ -366,6 +626,8 @@ export function createFlashcardApp(doc = document, win = window) {
   }
 
   function renderDoneView() {
+    tts.stop();
+    showTtsNotice('');
     const total = state.cards.length;
     showOnlyView(els.doneView);
     els.progressText.textContent = `${total} / ${total}`;
@@ -493,6 +755,8 @@ export function createFlashcardApp(doc = document, win = window) {
 
       state.isSubmitting = false;
       els.syncIndicator.hidden = true;
+      tts.stop();
+      showTtsNotice('');
       state.currentIndex += 1;
       state.isRevealed = false;
       renderCurrentCard();
@@ -578,6 +842,8 @@ export function createFlashcardApp(doc = document, win = window) {
   }
 
   async function init() {
+    tts.stop();
+    showTtsNotice('');
     showBanner('');
     showOnlyView(els.loadingView);
 
@@ -650,6 +916,33 @@ export function createFlashcardApp(doc = document, win = window) {
     }
   }
 
+  function speakCurrentField(key) {
+    const card = state.cards[state.currentIndex];
+    if (!card) return;
+    if (key === 'word') {
+      tts.speak('word', card.english);
+    } else if (key === 'context') {
+      tts.speak('context', card.original_context, { missingSentinel: MISSING_CONTEXT_TEXT });
+    } else if (key === 'example') {
+      tts.speak('example', card.example?.en);
+    }
+  }
+
+  function bindSpeakTrigger(el, key) {
+    if (!el) return;
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      speakCurrentField(key);
+    });
+  }
+
+  bindSpeakTrigger(els.btnSpeakWord, 'word');
+  bindSpeakTrigger(els.wordEnglish, 'word');
+  bindSpeakTrigger(els.btnSpeakContext, 'context');
+  bindSpeakTrigger(els.wordContext, 'context');
+  bindSpeakTrigger(els.btnSpeakExample, 'example');
+  bindSpeakTrigger(els.exampleEn, 'example');
+
   // 绑定事件
   els.flashcard.addEventListener('click', (e) => {
     if (!state.isRevealed) {
@@ -659,6 +952,7 @@ export function createFlashcardApp(doc = document, win = window) {
   });
 
   els.flashcard.addEventListener('keydown', (e) => {
+    if (e.target && e.target !== els.flashcard) return;
     if ((e.key === 'Enter' || e.key === ' ') && !state.isRevealed) {
       e.preventDefault();
       revealCard();
@@ -675,6 +969,8 @@ export function createFlashcardApp(doc = document, win = window) {
 
   els.btnPrevCard.addEventListener('click', () => {
     if (state.currentIndex > 0 && !state.isSubmitting) {
+      tts.stop();
+      showTtsNotice('');
       state.currentIndex -= 1;
       state.isRevealed = false;
       renderCurrentCard();
@@ -683,6 +979,8 @@ export function createFlashcardApp(doc = document, win = window) {
 
   els.btnReviewCards.addEventListener('click', () => {
     if (state.cards.length > 0) {
+      tts.stop();
+      showTtsNotice('');
       state.currentIndex = 0;
       state.isRevealed = false;
       renderCurrentCard();
@@ -695,6 +993,7 @@ export function createFlashcardApp(doc = document, win = window) {
 
   return {
     state,
+    tts,
     init,
     revealCard,
     handleGradeClick,
