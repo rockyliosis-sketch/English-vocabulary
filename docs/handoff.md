@@ -51,3 +51,18 @@
 - 测了什么：`npm test` 5 个测试文件、30 个用例全部通过（新增 5 个，只用虚构数据的内存 SQLite）：重复执行无害、已存在卡的进度不变、读回查询的 `EXPLAIN QUERY PLAN` 为主键 `SEARCH`、没有 `SCAN`/递归 CTE/`INSERT OR REPLACE`。
 - 没有部署，没有连接或改动真实 D1，没有碰 `main`。只改文档和本地脚本，网站不需要重新部署。
 - 还剩什么：PR 等 Rocky 审；规则文档里待 Rocky 裁决的几处不一致写在 PR 描述里。
+
+## 2026-11-25：闪卡点击朗读英文（Web Speech API，纯前端）
+
+- 本条为最新交接（2026-11-25 14:38 Europe/Athens / 2026-11-25 20:38 Asia/Shanghai）。分支 `feat/20261125-tap-to-speak`，从 `origin/main`（`fd8244f`）开出。
+- 改动文件：`public/index.html`、`public/styles.css`、`public/app.js`、`tests/tts.test.mjs`、`tests/e2e.test.mjs`、`docs/handoff.md`。未改 `functions/`、`migrations/`、API、D1 或排期逻辑；零密钥、零第三方服务。
+- D1 读行数估算：**额外 0 读 / 0 写**；本次未连接或查询真实 D1。
+- 朗读能力与交互：
+  - 基于浏览器原生 `window.speechSynthesis` + `SpeechSynthesisUtterance`，`lang = 'en-US'`、`rate = 0.9`，语音优先 `en-US`（含 `voiceschanged` 监听）→ `en-*` → 系统默认；持有当前 `SpeechSynthesisUtterance` 引用防回收；空闲时不无谓 `cancel()`，切换目标先 `cancel()` 再同手势 `speak()`，主动取消的 `canceled`/`interrupted` 不误报。
+  - 仅朗读 3 处英文：正面单词 `#word-english`（`#btn-speak-word`）、背面有效原场景 `#word-context`（`#btn-speak-context`）、背面当日轮换例句 `#example-en`（`#btn-speak-example`）。中文、IPA、辨析、相关词不读；不自动朗读。
+  - 未翻开时点单词或喇叭只朗读不翻面（`stopPropagation`）；原场景为「原场景未提供」时隐藏喇叭且点击不发声；再点同处停止、点他处切换、切卡/完成页自动停止；不支持或失败时以中性 `#tts-notice` 轻提示，不阻断打分。
+  - 喇叭使用轻量内联 SVG，`44×44px` 触摸热区，保留底部三按钮热区。
+- 测了什么：
+  - `tests/tts.test.mjs`（4/4 通过）、`tests/e2e.test.mjs`（5/5 通过）、`tests/api.test.mjs`（2/2 通过）、`tests/scheduler.test.mjs`（8/8 通过）、`tests/import-inbox.test.mjs`（5/5 通过）；`npm test` 全量在当前容器 Node 24 下为 29/35 通过（其余 6 项失败均在未改动的历史草稿 `tests/sql-drafts.test.mjs` 的 `03-top-up-examples.sql`，系新版 SQLite 对多层嵌套 CTE 报 `VIEWs and/or subqueries nested too deep`）。
+  - 本地无头 Chrome 渲染检查了虚构卡片在 `440×956`（正面与背面）、`1024×1366`（iPad 竖屏背面）、`1366×1024`（iPad 横屏左右双栏背面）的版式，无横向溢出，喇叭对齐清晰，底部三按钮未受挤压。未在真实 iPhone 17 Pro Max / 12.9 寸 iPad Pro Safari 真机测试。
+- 未合并 `main`，未 force push，未部署（Cloudflare Pages 需在 Rocky 批准后另行 Direct Upload）。
