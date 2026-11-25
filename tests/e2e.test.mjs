@@ -48,11 +48,21 @@ class MockElement {
     if (!this.listeners.has(type)) this.listeners.set(type, []);
     this.listeners.get(type).push(fn);
   }
-  click() {
+  click(extra = {}) {
+    let propagationStopped = false;
+    const ev = {
+      target: this,
+      preventDefault() {},
+      stopPropagation() {
+        propagationStopped = true;
+      },
+      ...extra
+    };
     const list = this.listeners.get('click') || [];
     for (const fn of list) {
-      fn({ preventDefault() {}, stopPropagation() {} });
+      fn(ev);
     }
+    return { propagationStopped };
   }
   append(...nodes) { this.children.push(...nodes); }
   replaceChildren(...nodes) { this.children = [...nodes]; }
@@ -71,20 +81,24 @@ function createMockDomAndWindow(db, queryDate = '2026-11-10') {
     ['empty-view', new MockElement('empty-view', { hidden: true })],
     ['card-view', new MockElement('card-view', { hidden: true })],
     ['done-view', new MockElement('done-view', { hidden: true })],
+    ['tts-notice', new MockElement('tts-notice', { hidden: true })],
     ['flashcard', new MockElement('flashcard', { 'aria-expanded': 'false' })],
     ['card-front', new MockElement('card-front')],
     ['card-back', new MockElement('card-back', { hidden: true })],
     ['word-pos', new MockElement('word-pos')],
     ['today-graded-badge', new MockElement('today-graded-badge', { hidden: true })],
     ['word-english', new MockElement('word-english')],
+    ['btn-speak-word', new MockElement('btn-speak-word', { 'aria-pressed': 'false' })],
     ['word-ipa', new MockElement('word-ipa')],
     ['flip-hint', new MockElement('flip-hint')],
     ['word-chinese', new MockElement('word-chinese')],
     ['word-context', new MockElement('word-context')],
+    ['btn-speak-context', new MockElement('btn-speak-context', { hidden: true, 'aria-pressed': 'false' })],
     ['word-notes', new MockElement('word-notes')],
     ['related-words-section', new MockElement('related-words-section', { hidden: true })],
     ['related-words-list', new MockElement('related-words-list')],
     ['example-label', new MockElement('example-label')],
+    ['btn-speak-example', new MockElement('btn-speak-example', { 'aria-pressed': 'false' })],
     ['example-en', new MockElement('example-en')],
     ['example-zh', new MockElement('example-zh')],
     ['action-bar', new MockElement('action-bar', { hidden: true })],
@@ -446,6 +460,145 @@ test('Related words reveal after notes, render as text, and clear when switching
     assert.equal(list.children.length, 0);
     assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM words').get().n, 3);
     assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM review_logs').get().n, 2);
+  } finally {
+    db.sqlite.close();
+  }
+});
+
+test('Tap-to-speak reads word, daily example, and real context without auto-playing or flipping unflipped cards, and degrades safely', async () => {
+  const html = fs.readFileSync(path.resolve(__dirname, '../public/index.html'), 'utf-8');
+  const css = fs.readFileSync(path.resolve(__dirname, '../public/styles.css'), 'utf-8');
+  assert.match(html, /id="btn-speak-word"/);
+  assert.match(html, /id="btn-speak-context"/);
+  assert.match(html, /id="btn-speak-example"/);
+  assert.match(html, /id="tts-notice"/);
+  assert.match(css, /\.speak-btn[\s\S]*min-width:\s*44px/);
+  assert.match(css, /\.speak-btn[\s\S]*min-height:\s*44px/);
+
+  const db = createTestD1WithMigration();
+  try {
+    const insertStmt = db.sqlite.prepare(`
+      INSERT INTO words (
+        id, english, ipa, pos, chinese_sense,
+        original_context, usage_notes, examples_json,
+        added_at, stage, next_review_date,
+        last_feedback, last_feedback_at, paused
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    insertStmt.run(
+      'arrange-v-1', 'arrange', '/əˈreɪndʒ/', 'v.', '安排，筹备',
+      'Can you arrange a car to the airport?', '常用于安排行程或会议',
+      JSON.stringify([
+        { en: 'We arranged a quick call for Tuesday.', zh: '我们安排了周二的简短通话。' },
+        { en: 'She arranged the flowers neatly.', zh: '她把花摆得很整齐。' },
+        { en: 'I will arrange a late checkout.', zh: '我来安排延迟退房。' }
+      ]),
+      '2026-11-09T09:00:00+08:00', 0, '2026-11-10', null, null, 0
+    );
+    insertStmt.run(
+      'valid-adj-1', 'valid', '/ˈvælɪd/', 'adj.', '有效的，站得住脚的',
+      null, '常形容理由或证件有效',
+      JSON.stringify([
+        { en: 'Your boarding pass is still valid.', zh: '你的登机牌仍然有效。' },
+        { en: 'That is a valid point.', zh: '这个观点站得住脚。' },
+        { en: 'Make sure your passport is valid.', zh: '确保你的护照有效。' }
+      ]),
+      '2026-11-09T09:00:00+08:00', 0, '2026-11-10', null, null, 0
+    );
+
+    const { doc, win, elements } = createMockDomAndWindow(db, '2026-11-10');
+    const spoken = [];
+    let cancelCount = 0;
+    const usVoice = { name: 'Samantha', lang: 'en-US', localService: true, default: true };
+    class MockUtterance {
+      constructor(text) {
+        this.text = text;
+        this.lang = '';
+        this.rate = 1;
+        this.voice = null;
+      }
+    }
+    win.SpeechSynthesisUtterance = MockUtterance;
+    win.speechSynthesis = {
+      speaking: false,
+      pending: false,
+      getVoices: () => [usVoice],
+      addEventListener() {},
+      cancel() {
+        cancelCount += 1;
+        this.speaking = false;
+      },
+      speak(u) {
+        this.speaking = true;
+        spoken.push(u);
+      }
+    };
+
+    const app = createFlashcardApp(doc, win);
+    await app.init();
+
+    // Never auto-speaks on load
+    assert.equal(spoken.length, 0);
+    assert.equal(elements.get('btn-speak-word').getAttribute('aria-label'), '朗读单词 arrange');
+
+    // Unflipped: clicking word speaker button or word text stops propagation and does NOT flip
+    const rBtn = elements.get('btn-speak-word').click();
+    assert.equal(rBtn.propagationStopped, true);
+    assert.equal(app.state.isRevealed, false);
+    assert.equal(elements.get('card-back').hidden, true);
+    assert.equal(spoken.length, 1);
+    assert.equal(spoken[0].text, 'arrange');
+    assert.equal(spoken[0].lang, 'en-US');
+    assert.equal(spoken[0].rate, 0.9);
+    assert.equal(elements.get('btn-speak-word').getAttribute('aria-pressed'), 'true');
+
+    // Clicking word text while already speaking word stops playback and still does not flip
+    const rText = elements.get('word-english').click();
+    assert.equal(rText.propagationStopped, true);
+    assert.equal(app.state.isRevealed, false);
+    assert.equal(cancelCount, 1);
+    assert.equal(elements.get('btn-speak-word').getAttribute('aria-pressed'), 'false');
+
+    // Clicking card surface flips normally (and does NOT auto-speak)
+    elements.get('flashcard').click();
+    assert.equal(app.state.isRevealed, true);
+    assert.equal(spoken.length, 1);
+
+    // Flipped: context speaker visible for real context, example speaker reads daily rotated example
+    assert.equal(elements.get('btn-speak-context').hidden, false);
+    elements.get('btn-speak-context').click();
+    assert.equal(spoken.length, 2);
+    assert.equal(spoken[1].text, 'Can you arrange a car to the airport?');
+
+    elements.get('example-en').click();
+    assert.equal(spoken.length, 3);
+    assert.equal(spoken[2].text, elements.get('example-en').textContent);
+
+    // Grading advances to Card #2 and stops previous speech
+    await app.handleGradeClick('remembered');
+    assert.equal(elements.get('word-english').textContent, 'valid');
+    assert.equal(app.tts.getActiveKey(), null);
+
+    // Card #2 has null original_context -> "原场景未提供", speaker hidden, clicking context stays silent
+    app.revealCard();
+    assert.equal(elements.get('word-context').textContent, '原场景未提供');
+    assert.equal(elements.get('btn-speak-context').hidden, true);
+    const spokenBefore = spoken.length;
+    elements.get('word-context').click();
+    assert.equal(spoken.length, spokenBefore);
+    assert.equal(elements.get('tts-notice').hidden, true);
+
+    // Unsupported browser shows non-blocking notice and still allows grading
+    const envNoTts = createMockDomAndWindow(db, '2026-11-10');
+    const appNoTts = createFlashcardApp(envNoTts.doc, envNoTts.win);
+    await appNoTts.init();
+    envNoTts.elements.get('btn-speak-word').click();
+    assert.equal(envNoTts.elements.get('tts-notice').hidden, false);
+    assert.match(envNoTts.elements.get('tts-notice').textContent, /不支持朗读/);
+    assert.equal(envNoTts.elements.get('status-banner').hidden, true);
+    appNoTts.revealCard();
+    await appNoTts.handleGradeClick('familiar');
+    assert.equal(envNoTts.elements.get('done-view').hidden, false);
   } finally {
     db.sqlite.close();
   }

@@ -236,13 +236,105 @@ body {
   border-radius: 999px;
 }
 
-.word-english {
+.word-english-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 100%;
   margin: 10px 0 6px;
+}
+
+.word-english {
+  margin: 0;
   font-size: 2.35rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.18;
   word-break: break-word;
+}
+
+.tts-notice {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+  background: var(--accent-bg);
+  border: 1px solid var(--border);
+  text-align: center;
+}
+
+.speak-btn {
+  appearance: none;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+}
+
+.speak-btn:hover {
+  background: #ebf8ff;
+  color: #2b6cb0;
+}
+
+.speak-btn:active {
+  transform: scale(0.94);
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.speak-btn:focus-visible {
+  outline: 2px solid #3182ce;
+  outline-offset: 2px;
+}
+
+.speak-btn.is-speaking {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.speak-btn-inline {
+  margin: -8px -8px -8px 0;
+}
+
+.speak-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.speak-btn-word .speak-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.speakable-text {
+  cursor: pointer;
+  border-radius: 8px;
+  transition: color 0.15s ease, opacity 0.12s ease;
+}
+
+.speakable-text:active {
+  opacity: 0.72;
+}
+
+.speakable-text.is-speaking {
+  color: #1d4ed8;
 }
 
 .word-ipa {
@@ -288,12 +380,24 @@ body {
   gap: 14px;
 }
 
+.field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
 .field-label {
   margin: 0 0 4px;
   font-size: 0.8rem;
   font-weight: 700;
   color: var(--text-muted);
   letter-spacing: 0.04em;
+}
+
+.field-header .field-label {
+  margin: 0;
 }
 
 .word-chinese {
@@ -326,6 +430,10 @@ body {
 }
 
 .example-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 6px;
 }
 
@@ -589,9 +697,14 @@ body {
     padding: 5px 14px;
   }
 
+  .word-english-row {
+    margin: 14px 0 8px;
+    gap: 8px;
+  }
+
   .word-english {
     font-size: 2.9rem;
-    margin: 14px 0 8px;
+    margin: 0;
   }
 
   .word-ipa {
@@ -631,9 +744,17 @@ body {
     padding: 16px 18px;
   }
 
+  .field-header {
+    margin-bottom: 6px;
+  }
+
   .field-label {
     font-size: 0.86rem;
     margin-bottom: 6px;
+  }
+
+  .field-header .field-label {
+    margin: 0;
   }
 
   .word-chinese {

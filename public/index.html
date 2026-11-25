@@ -38,6 +38,8 @@
 
       <!-- 单张闪卡视图 -->
       <section id="card-view" class="card-stage" hidden>
+        <p id="tts-notice" class="tts-notice" role="status" aria-live="polite" hidden></p>
+
         <article
           id="flashcard"
           class="flashcard"
@@ -52,7 +54,22 @@
               <span id="word-pos" class="pos-tag"></span>
               <span id="today-graded-badge" class="graded-badge" hidden></span>
             </div>
-            <h1 id="word-english" class="word-english"></h1>
+            <div class="word-english-row">
+              <h1 id="word-english" class="word-english speakable-text" lang="en"></h1>
+              <button
+                id="btn-speak-word"
+                type="button"
+                class="speak-btn speak-btn-word"
+                aria-label="朗读单词"
+                aria-pressed="false"
+              >
+                <svg class="speak-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M11 5L6 9H3v6h3l5 4V5z" fill="currentColor" />
+                  <path d="M15.5 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                  <path d="M18.5 5.5a9 9 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                </svg>
+              </button>
+            </div>
             <p id="word-ipa" class="word-ipa"></p>
             <p id="flip-hint" class="flip-hint">点击卡片翻开释义、原场景与例句</p>
           </div>
@@ -68,7 +85,23 @@
 
             <div class="field-pair-grid">
               <div class="field-block field-panel">
-                <h2 class="field-label">原场景</h2>
+                <div class="field-header">
+                  <h2 class="field-label">原场景</h2>
+                  <button
+                    id="btn-speak-context"
+                    type="button"
+                    class="speak-btn speak-btn-inline"
+                    aria-label="朗读原场景"
+                    aria-pressed="false"
+                    hidden
+                  >
+                    <svg class="speak-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M11 5L6 9H3v6h3l5 4V5z" fill="currentColor" />
+                      <path d="M15.5 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                      <path d="M18.5 5.5a9 9 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    </svg>
+                  </button>
+                </div>
                 <p id="word-context" class="field-content context-text"></p>
               </div>
 
@@ -86,8 +119,21 @@
             <div id="word-example-box" class="field-block example-box">
               <div class="example-header">
                 <span id="example-label" class="example-badge">示例</span>
+                <button
+                  id="btn-speak-example"
+                  type="button"
+                  class="speak-btn speak-btn-inline"
+                  aria-label="朗读例句"
+                  aria-pressed="false"
+                >
+                  <svg class="speak-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M11 5L6 9H3v6h3l5 4V5z" fill="currentColor" />
+                    <path d="M15.5 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    <path d="M18.5 5.5a9 9 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                  </svg>
+                </button>
               </div>
-              <p id="example-en" class="example-en"></p>
+              <p id="example-en" class="example-en speakable-text" lang="en"></p>
               <p id="example-zh" class="example-zh"></p>
             </div>
           </div>
