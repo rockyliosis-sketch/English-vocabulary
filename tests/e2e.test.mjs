@@ -105,10 +105,14 @@ function createMockDomAndWindow(db, queryDate = '2026-11-10') {
     ['btn-remembered', new MockElement('btn-remembered', { 'data-result': 'remembered' })],
     ['btn-familiar', new MockElement('btn-familiar', { 'data-result': 'familiar' })],
     ['btn-forgotten', new MockElement('btn-forgotten', { 'data-result': 'forgotten' })],
+    ['hint-remembered', new MockElement('hint-remembered')],
+    ['hint-familiar', new MockElement('hint-familiar')],
+    ['hint-forgotten', new MockElement('hint-forgotten')],
     ['done-subtitle', new MockElement('done-subtitle')],
     ['stat-remembered', new MockElement('stat-remembered')],
     ['stat-familiar', new MockElement('stat-familiar')],
     ['stat-forgotten', new MockElement('stat-forgotten')],
+    ['btn-load-more', new MockElement('btn-load-more', { hidden: true })],
     ['btn-copy-results', new MockElement('btn-copy-results')],
     ['btn-review-cards', new MockElement('btn-review-cards')],
     ['copy-feedback', new MockElement('copy-feedback', { hidden: true })],
@@ -209,58 +213,66 @@ test('Mobile flashcard UI + D1 API end-to-end flow: two-step flip, refresh resum
   const app = createFlashcardApp(doc, win);
   await app.init();
 
-  // 1. Card #1 (crave-v-1) initially shows ONLY English, IPA, POS; back & 3 buttons are hidden
+  // 1. Card #1 is candid-adj-1 (new word prioritized ahead of remembered crave-v-1)
+  // Initially shows ONLY English, IPA, POS; back & 3 buttons are hidden
   assert.equal(elements.get('card-view').hidden, false);
-  assert.equal(elements.get('word-english').textContent, 'crave');
-  assert.equal(elements.get('word-ipa').textContent, '/kreɪv/');
-  assert.equal(elements.get('word-pos').textContent, 'v.');
+  assert.equal(elements.get('word-english').textContent, 'candid');
+  assert.equal(elements.get('word-ipa').textContent, '/ˈkændɪd/');
+  assert.equal(elements.get('word-pos').textContent, 'adj.');
   assert.equal(elements.get('card-back').hidden, true);
   assert.equal(elements.get('action-bar').hidden, true);
   assert.equal(elements.get('progress-text').textContent, '1 / 2');
+  assert.equal(elements.get('hint-remembered').textContent, '3天后');
+  assert.equal(elements.get('hint-familiar').textContent, '2天后');
+  assert.equal(elements.get('hint-forgotten').textContent, '明天');
 
   const card1ExampleBefore = elements.get('example-en').textContent;
 
-  // 2. Tap card to flip -> reveals meaning, context, notes, "示例" example, AND 3 buttons
+  // 2. Tap card to flip -> reveals meaning, context ("原场景未提供"), notes, "示例" example, AND 3 buttons
   app.revealCard();
   assert.equal(elements.get('card-back').hidden, false);
   assert.equal(elements.get('action-bar').hidden, false);
-  assert.equal(elements.get('word-chinese').textContent, '渴望，热望');
-  assert.equal(elements.get('word-context').textContent, '读文章：People crave sugar.');
+  assert.equal(elements.get('word-chinese').textContent, '坦率的，直言不讳的');
+  assert.equal(elements.get('word-context').textContent, '原场景未提供');
   assert.equal(elements.get('example-label').textContent, '示例');
 
-  // 3. Click "记住了" on Card #1 -> advances to Card #2 (unflipped, buttons hidden again)
+  // 3. Click "记住了" on Card #1 (candid, stage 0 -> 1) -> advances to Card #2 (crave, stage 1)
   await app.handleGradeClick('remembered');
   assert.equal(elements.get('progress-text').textContent, '2 / 2');
-  assert.equal(elements.get('word-english').textContent, 'candid');
+  assert.equal(elements.get('word-english').textContent, 'crave');
   assert.equal(elements.get('card-back').hidden, true);
   assert.equal(elements.get('action-bar').hidden, true);
+  assert.equal(elements.get('hint-remembered').textContent, '7天后');
+  assert.equal(elements.get('hint-familiar').textContent, '2天后');
+  assert.equal(elements.get('hint-forgotten').textContent, '明天');
 
-  // 4. Simulate page refresh in browser: resumes directly at Card #2 (candid),
-  // and going back to Card #1 shows the exact same example sentence
+  // 4. Simulate page refresh in browser: resumes directly at Card #2 (crave),
+  // and going back to Card #1 (candid) shows the exact same example sentence
   const { doc: doc2, win: win2, elements: els2 } = createMockDomAndWindow(db, '2026-11-10');
   globalThis.window = win2;
   const app2 = createFlashcardApp(doc2, win2);
   await app2.init();
-  assert.equal(els2.get('word-english').textContent, 'candid');
+  assert.equal(els2.get('word-english').textContent, 'crave');
   assert.equal(els2.get('progress-text').textContent, '2 / 2');
 
   // Navigate back to Card #1 and verify example sentence did not jump
   els2.get('btn-prev-card').click();
-  assert.equal(els2.get('word-english').textContent, 'crave');
+  assert.equal(els2.get('word-english').textContent, 'candid');
   assert.equal(els2.get('example-en').textContent, card1ExampleBefore);
 
-  // Re-grade Card #1 on the same day to "remembered" again -> stage must stay 2 (not 3)
+  // Re-grade Card #1 on the same day to "remembered" again -> stage must stay 1 (not 2)
   app2.revealCard();
   await app2.handleGradeClick('remembered');
-  assert.equal(els2.get('word-english').textContent, 'candid');
+  assert.equal(els2.get('word-english').textContent, 'crave');
 
-  // Flip Card #2 (candid, which has null original_context -> must show "原场景未提供")
+  // Flip Card #2 (crave) and grade "familiar" (stage 1 stays 1, +2 days)
   app2.revealCard();
-  assert.equal(els2.get('word-context').textContent, '原场景未提供');
+  assert.equal(els2.get('word-context').textContent, '读文章：People crave sugar.');
   await app2.handleGradeClick('familiar');
 
   // 5. All cards completed -> shows done view with summary and "一键复制今日结果"
   assert.equal(els2.get('done-view').hidden, false);
+  assert.equal(els2.get('btn-load-more').hidden, true);
   assert.equal(els2.get('stat-remembered').textContent, '1');
   assert.equal(els2.get('stat-familiar').textContent, '1');
   assert.equal(els2.get('stat-forgotten').textContent, '0');
@@ -273,11 +285,15 @@ test('Mobile flashcard UI + D1 API end-to-end flow: two-step flip, refresh resum
   assert.equal(copied.unsynced_count, 0);
   assert.match(copied.exported_at, /\+08:00$/);
   assert.equal(copied.results.length, 2);
-  assert.equal(copied.results[0].word_id, 'crave-v-1');
-  assert.equal(copied.results[0].stage_before, 1);
-  assert.equal(copied.results[0].stage_after, 2);
+  assert.equal(copied.results[0].word_id, 'candid-adj-1');
+  assert.equal(copied.results[0].stage_before, 0);
+  assert.equal(copied.results[0].stage_after, 1);
   assert.equal(copied.results[0].press_count, 2);
   assert.equal(copied.results[0].synced, true);
+  assert.equal(copied.results[1].word_id, 'crave-v-1');
+  assert.equal(copied.results[1].stage_before, 1);
+  assert.equal(copied.results[1].stage_after, 1);
+  assert.equal(copied.results[1].next_review_date_after, '2026-11-12');
 });
 
 test('Failed POST /api/review stays as pending_retry (not skipped on refresh, never falsely completed, accurate stage_after in export)', async () => {
@@ -599,6 +615,67 @@ test('Tap-to-speak reads word, daily example, and real context without auto-play
     appNoTts.revealCard();
     await appNoTts.handleGradeClick('familiar');
     assert.equal(envNoTts.elements.get('done-view').hidden, false);
+  } finally {
+    db.sqlite.close();
+  }
+});
+
+test('Daily cap of 15 defers overflow cleanly and done view allows loading another batch on demand', async () => {
+  const db = createTestD1WithMigration();
+  try {
+    const insert = db.sqlite.prepare(`
+      INSERT INTO words (
+        id, english, ipa, pos, chinese_sense,
+        original_context, usage_notes, examples_json,
+        added_at, stage, next_review_date,
+        last_feedback, last_feedback_at, paused
+      ) VALUES (?, ?, '/test/', 'v.', '测试', NULL, '注解', ?, '2026-11-01T09:00:00+08:00', 0, '2026-11-10', NULL, NULL, 0)
+    `);
+    for (let i = 1; i <= 20; i++) {
+      insert.run(
+        `word-${String(i).padStart(2, '0')}`,
+        `word${i}`,
+        JSON.stringify([{ en: `Sentence for word${i}.`, zh: `例句 ${i}。` }])
+      );
+    }
+
+    const { doc, win, elements } = createMockDomAndWindow(db, '2026-11-10');
+    globalThis.window = win;
+    const app = createFlashcardApp(doc, win);
+    await app.init();
+
+    // Only 15 loaded initially
+    assert.equal(app.state.cards.length, 15);
+    assert.equal(elements.get('progress-text').textContent, '1 / 15');
+
+    // Complete all 15 cards
+    for (let i = 0; i < 15; i++) {
+      app.revealCard();
+      await app.handleGradeClick('remembered');
+    }
+
+    // Done view appears with deferred count = 5 and load-more button "+5 张"
+    assert.equal(elements.get('done-view').hidden, false);
+    assert.match(elements.get('done-subtitle').textContent, /另有 5 张到期词已自动顺延/);
+    assert.equal(elements.get('btn-load-more').hidden, false);
+    assert.equal(elements.get('btn-load-more').textContent, '再来一组（+5 张）');
+
+    // Click load more -> loads remaining 5 cards and lands on Card #16 (index 15)
+    await app.loadMoreCards();
+    assert.equal(elements.get('card-view').hidden, false);
+    assert.equal(app.state.cards.length, 20);
+    assert.equal(app.state.currentIndex, 15);
+    assert.equal(elements.get('progress-text').textContent, '16 / 20');
+
+    // Finish remaining 5 -> done view hides load-more button
+    for (let i = 0; i < 5; i++) {
+      app.revealCard();
+      await app.handleGradeClick('familiar');
+    }
+    assert.equal(elements.get('done-view').hidden, false);
+    assert.equal(elements.get('btn-load-more').hidden, true);
+    assert.equal(elements.get('stat-remembered').textContent, '15');
+    assert.equal(elements.get('stat-familiar').textContent, '5');
   } finally {
     db.sqlite.close();
   }

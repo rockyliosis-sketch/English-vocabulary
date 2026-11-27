@@ -66,3 +66,26 @@
   - `tests/tts.test.mjs`（4/4 通过）、`tests/e2e.test.mjs`（5/5 通过）、`tests/api.test.mjs`（2/2 通过）、`tests/scheduler.test.mjs`（8/8 通过）、`tests/import-inbox.test.mjs`（5/5 通过）；`npm test` 全量在当前容器 Node 24 下为 29/35 通过（其余 6 项失败均在未改动的历史草稿 `tests/sql-drafts.test.mjs` 的 `03-top-up-examples.sql`，系新版 SQLite 对多层嵌套 CTE 报 `VIEWs and/or subqueries nested too deep`）。
   - 本地无头 Chrome 渲染检查了虚构卡片在 `440×956`（正面与背面）、`1024×1366`（iPad 竖屏背面）、`1366×1024`（iPad 横屏左右双栏背面）的版式，无横向溢出，喇叭对齐清晰，底部三按钮未受挤压。未在真实 iPhone 17 Pro Max / 12.9 寸 iPad Pro Safari 真机测试。
 - 未合并 `main`，未 force push，未部署（Cloudflare Pages 需在 Rocky 批准后另行 Direct Upload）。
+
+## 2026-11-27：复习系统减压休整（每日 15 张上限 + 稳固间隔 + 薄弱优先 + 按钮天数提示）
+
+- 本条为最新交接。分支 `feat/20261127-review-pacing`，从 `main`（`d71a2a2`）开出。
+- 改动文件：`functions/_lib/scheduler.js`、`functions/_lib/vocab-repo.js`、`functions/api/today.js`、`public/index.html`、`public/styles.css`、`public/app.js`、`tests/scheduler.test.mjs`、`tests/api.test.mjs`、`tests/e2e.test.mjs`、`docs/handoff.md`。**未改 `migrations/`、未新增/修改数据库表结构、未连接或改动真实 D1**。
+- 核心改进（按 Rocky 确认的三项偏好）：
+  1. **每日 15 张定额 + 按需加练**：`GET /api/today` 默认每次最多返回 `15` 张（含今日已背卡片，刷新不丢进度）；超出部分自动顺延，完成页显示顺延张数并提供「再来一组（+10 张）」按钮（请求 `?limit=已加载+10`），不强迫清零积压。
+  2. **拉开「忘了 / 有点熟 / 记住了」差距 + 按钮显示天数**：
+     - `forgotten`（忘了）：归 `0` 档，`1` 天后（明天）。
+     - `familiar`（有点熟）：**保持当前档位不变**，按稳固阶梯 `FAMILIAR_DAYS = [2, 2, 4, 7, 14, 30]` 拉开间隔，不再与「忘了」一起挤回明天。
+     - `remembered`（记住了）：升档 `min(stage+1, 5)`，按 `STAGE_DAYS = [1, 3, 7, 14, 30, 60]` 拉远。
+     - 三个按钮下方实时显示本卡对应的下次复习间隔（如 `3天后` / `2天后` / `明天`）。
+  3. **薄弱词优先 + 穿插新词**：未背到期词按 `forgotten → familiar → 新词(last_feedback IS NULL) → remembered(低档位优先) → 最早到期日期` 排序抽卡。
+- D1 读行数估算与 `EXPLAIN QUERY PLAN` 验证：
+  - 将原无 `LIMIT` 的 `LEFT JOIN … OR r.word_id IS NOT NULL` 拆分为三条走索引的查询：
+    1. `TODAY_REVIEWED_CARDS_SQL`：走 `idx_review_logs_date` + `words` 主键 + `LIMIT 200`，单次读当日已背行数（通常 `0–25` 行）。
+    2. `TODAY_PENDING_DUE_COUNT_SQL`：走 `idx_words_due` + `review_logs` 唯一覆盖索引，只扫未暂停且已到期的索引项。
+    3. `TODAY_PENDING_DUE_CARDS_SQL`：走 `idx_words_due` + `review_logs` 唯一覆盖索引 + `LIMIT ?`，仅在尚有空位时执行，返回最多 `15` 行（个人词库单次加载约几十行级，远低于 500 万/天免费额度）。
+  - 本地 SQLite `EXPLAIN QUERY PLAN` 已写入自动化测试断言：三条查询均命中索引，**零全表 `SCAN`**。
+- 测了什么：
+  - 核心测试（`scheduler`、`api`、`e2e`、`tts`、`import-inbox`）：**26 / 26 全部通过**（新增每日上限/优先级/索引计划测试与完成页「再来一组」端到端测试）。
+- 状态：已推送到远端分支 `feat/20261127-review-pacing` 并创建 PR；**未合并 `main`、未 force push、未部署**（本环境无 Cloudflare 凭证，待 Rocky 批准合并后通过 Cloudflare Pages Connect to Git 或 `wrangler pages deploy` 与点击朗读功能一并上线）。
+

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   STAGE_DAYS,
+  FAMILIAR_DAYS,
   MISSING_CONTEXT_TEXT,
   EXAMPLE_LABEL,
   isValidDateString,
@@ -12,6 +13,7 @@ import {
   computeNewWordSchedule,
   resolveBaseStateForDay,
   computeReviewTransition,
+  previewReviewIntervals,
   selectDailyExample,
   parseRelatedWordsList,
   formatWordCardForToday
@@ -42,8 +44,9 @@ test('New word starts at stage 0 and is due the next day', () => {
   assert.deepEqual(s2, { stage: 0, next_review_date: '2026-11-11' });
 });
 
-test('Stage ladder [1, 3, 7, 14, 30, 60] transitions for all stages 0..5', () => {
+test('Stage ladder [1, 3, 7, 14, 30, 60] and familiar ladder [2, 2, 4, 7, 14, 30] transitions for all stages 0..5', () => {
   assert.deepEqual(STAGE_DAYS, [1, 3, 7, 14, 30, 60]);
+  assert.deepEqual(FAMILIAR_DAYS, [2, 2, 4, 7, 14, 30]);
   const reviewDate = '2026-11-10';
 
   const expectedRemembered = [
@@ -67,17 +70,24 @@ test('Stage ladder [1, 3, 7, 14, 30, 60] transitions for all stages 0..5', () =>
     assert.equal(res.nextReviewDateAfter, exp.nextReviewDateAfter);
   }
 
-  // Familiar: stage - 1 (min 0), always reviewed next day (+1 day)
-  const expectedFamiliar = [0, 0, 1, 2, 3, 4];
-  for (let stageBefore = 0; stageBefore <= 5; stageBefore++) {
+  // Familiar: keeps stage_before unchanged and spaces out by FAMILIAR_DAYS [2, 2, 4, 7, 14, 30]
+  const expectedFamiliar = [
+    { stageBefore: 0, intervalDays: 2, nextReviewDateAfter: '2026-11-12' },
+    { stageBefore: 1, intervalDays: 2, nextReviewDateAfter: '2026-11-12' },
+    { stageBefore: 2, intervalDays: 4, nextReviewDateAfter: '2026-11-14' },
+    { stageBefore: 3, intervalDays: 7, nextReviewDateAfter: '2026-11-17' },
+    { stageBefore: 4, intervalDays: 14, nextReviewDateAfter: '2026-11-24' },
+    { stageBefore: 5, intervalDays: 30, nextReviewDateAfter: '2026-12-10' }
+  ];
+  for (const exp of expectedFamiliar) {
     const res = computeReviewTransition({
-      stageBefore,
+      stageBefore: exp.stageBefore,
       reviewDate,
       result: 'familiar'
     });
-    assert.equal(res.stageAfter, expectedFamiliar[stageBefore]);
-    assert.equal(res.intervalDays, 1);
-    assert.equal(res.nextReviewDateAfter, '2026-11-11');
+    assert.equal(res.stageAfter, exp.stageBefore);
+    assert.equal(res.intervalDays, exp.intervalDays);
+    assert.equal(res.nextReviewDateAfter, exp.nextReviewDateAfter);
   }
 
   // Forgotten: always returns to stage 0, reviewed next day (+1 day)
@@ -91,6 +101,11 @@ test('Stage ladder [1, 3, 7, 14, 30, 60] transitions for all stages 0..5', () =>
     assert.equal(res.intervalDays, 1);
     assert.equal(res.nextReviewDateAfter, '2026-11-11');
   }
+
+  // previewReviewIntervals matches all three buttons
+  assert.deepEqual(previewReviewIntervals(0), { remembered: 3, familiar: 2, forgotten: 1 });
+  assert.deepEqual(previewReviewIntervals(2), { remembered: 14, familiar: 4, forgotten: 1 });
+  assert.deepEqual(previewReviewIntervals(5), { remembered: 60, familiar: 30, forgotten: 1 });
 });
 
 test('Same-day multiple presses always calculate from stage_before of first press today', () => {
@@ -140,15 +155,15 @@ test('Same-day multiple presses always calculate from stage_before of first pres
   assert.equal(t2.stageAfter, 3);
   assert.equal(t2.nextReviewDateAfter, '2026-11-24');
 
-  // 3rd press on same day: user changes mind to "familiar" -> computed from base stage 2 -> stage 1 (not 3 -> 2!)
+  // 3rd press on same day: user changes mind to "familiar" -> computed from base stage 2 -> stage 2 (+4 days -> 2026-11-14)
   const base3 = resolveBaseStateForDay({ word, todayLog });
   const t3 = computeReviewTransition({
     stageBefore: base3.stageBefore,
     reviewDate,
     result: 'familiar'
   });
-  assert.equal(t3.stageAfter, 1);
-  assert.equal(t3.nextReviewDateAfter, '2026-11-11');
+  assert.equal(t3.stageAfter, 2);
+  assert.equal(t3.nextReviewDateAfter, '2026-11-14');
 });
 
 test('Daily example rotation stays 100% stable within the same day before and after button press', () => {
