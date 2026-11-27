@@ -148,6 +148,7 @@
             data-result="remembered"
           >
             <span class="grade-title">记住了</span>
+            <span id="hint-remembered" class="grade-hint">3天后</span>
           </button>
           <button
             id="btn-familiar"
@@ -156,6 +157,7 @@
             data-result="familiar"
           >
             <span class="grade-title">有点熟</span>
+            <span id="hint-familiar" class="grade-hint">2天后</span>
           </button>
           <button
             id="btn-forgotten"
@@ -164,11 +166,12 @@
             data-result="forgotten"
           >
             <span class="grade-title">忘了</span>
+            <span id="hint-forgotten" class="grade-hint">明天</span>
           </button>
         </div>
       </section>
 
-      <!-- 今日完成视图（含一键复制兜底与回看修改） -->
+      <!-- 今日完成视图（含按需加练、一键复制兜底与回看修改） -->
       <section id="done-view" class="state-card done-card" hidden>
         <h1 class="state-title">今日复习已完成</h1>
         <p id="done-subtitle" class="state-desc"></p>
@@ -189,6 +192,9 @@
         </div>
 
         <div class="done-actions">
+          <button id="btn-load-more" type="button" class="load-more-btn" hidden>
+            再来一组（+10 张）
+          </button>
           <button id="btn-copy-results" type="button" class="primary-btn">
             一键复制今日结果
           </button>

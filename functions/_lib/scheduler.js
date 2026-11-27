@@ -4,8 +4,13 @@
  */
 
 export const STAGE_DAYS = Object.freeze([1, 3, 7, 14, 30, 60]);
+export const FAMILIAR_DAYS = Object.freeze([2, 2, 4, 7, 14, 30]);
 export const MIN_STAGE = 0;
 export const MAX_STAGE = 5;
+
+export const DEFAULT_DAILY_LIMIT = 15;
+export const LOAD_MORE_STEP = 10;
+export const MAX_DAILY_LIMIT = 100;
 
 export const VALID_RESULTS = Object.freeze(['remembered', 'familiar', 'forgotten']);
 
@@ -172,10 +177,11 @@ export function resolveBaseStateForDay({ word, todayLog = null }) {
  * Computes the new stage and next_review_date from the baseline stage before today's first press.
  *
  * Rules:
- * - Stage ladder: [1, 3, 7, 14, 30, 60] days for stages 0..5.
+ * - Remembered ladder: [1, 3, 7, 14, 30, 60] days for stages 0..5.
+ * - Familiar steady ladder: [2, 2, 4, 7, 14, 30] days for stages 0..5.
  * - remembered (记住了): stage_after = min(stage_before + 1, 5), next_review_date = review_date + STAGE_DAYS[stage_after].
  *   (At stage 5, remembered stays at stage 5 and adds 60 days).
- * - familiar (有点熟): stage_after = max(stage_before - 1, 0), next_review_date = review_date + 1 day (tomorrow).
+ * - familiar (有点熟): keeps stage_before unchanged, next_review_date = review_date + FAMILIAR_DAYS[stage_before].
  * - forgotten (忘了): stage_after = 0, next_review_date = review_date + 1 day (tomorrow).
  */
 export function computeReviewTransition({ stageBefore, reviewDate, result }) {
@@ -196,12 +202,12 @@ export function computeReviewTransition({ stageBefore, reviewDate, result }) {
     stageAfter = Math.min(stageBefore + 1, MAX_STAGE);
     intervalDays = STAGE_DAYS[stageAfter];
   } else if (result === 'familiar') {
-    stageAfter = Math.max(stageBefore - 1, MIN_STAGE);
-    intervalDays = 1;
+    stageAfter = stageBefore;
+    intervalDays = FAMILIAR_DAYS[stageBefore];
   } else {
     // 'forgotten'
     stageAfter = MIN_STAGE;
-    intervalDays = 1;
+    intervalDays = STAGE_DAYS[MIN_STAGE];
   }
 
   const nextReviewDateAfter = addDays(reviewDate, intervalDays);
@@ -213,6 +219,20 @@ export function computeReviewTransition({ stageBefore, reviewDate, result }) {
     stageAfter,
     intervalDays,
     nextReviewDateAfter
+  };
+}
+
+/**
+ * Returns the next review interval in days for each button given a baseline stage (0..5).
+ */
+export function previewReviewIntervals(stageBefore) {
+  const base = Number.isInteger(Number(stageBefore))
+    ? Math.max(MIN_STAGE, Math.min(MAX_STAGE, Number(stageBefore)))
+    : MIN_STAGE;
+  return {
+    remembered: STAGE_DAYS[Math.min(base + 1, MAX_STAGE)],
+    familiar: FAMILIAR_DAYS[base],
+    forgotten: STAGE_DAYS[MIN_STAGE]
   };
 }
 
@@ -361,6 +381,7 @@ export function formatWordCardForToday({
     next_review_date: String(word.next_review_date),
     stage_before_today: baseState.stageBefore,
     next_review_date_before_today: baseState.nextReviewDateBefore,
+    next_intervals: previewReviewIntervals(baseState.stageBefore),
     today_result: todayLog ? todayLog.result : null,
     today_reviewed_at: todayLog ? todayLog.reviewed_at : null,
     today_press_count: todayLog ? Number(todayLog.press_count) || 1 : 0

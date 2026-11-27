@@ -22,9 +22,14 @@ export async function onRequestGet(context) {
 
     const url = new URL(context.request.url);
     const dateParam = url.searchParams.get('date')?.trim();
+    const limitParam = url.searchParams.get('limit')?.trim();
     const targetDate = dateParam || getBeijingDateString();
 
-    const session = await getTodaySession(db, targetDate);
+    const session = await getTodaySession(
+      db,
+      targetDate,
+      limitParam ? { limit: Number(limitParam) } : {}
+    );
     return new Response(
       JSON.stringify({
         ok: true,

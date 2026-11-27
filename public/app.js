@@ -4,6 +4,8 @@ const EXAMPLE_LABEL = '示例';
 const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const STAGE_DAYS = Object.freeze([1, 3, 7, 14, 30, 60]);
+const FAMILIAR_DAYS = Object.freeze([2, 2, 4, 7, 14, 30]);
+const LOAD_MORE_STEP = 10;
 const MIN_STAGE = 0;
 const MAX_STAGE = 5;
 
@@ -244,9 +246,15 @@ export function addDaysDateString(dateStr, days) {
   return `${ty}-${tm}-${td}`;
 }
 
+export function formatIntervalHint(days) {
+  const n = Number(days);
+  if (!Number.isFinite(n) || n <= 1) return '明天';
+  return `${Math.round(n)}天后`;
+}
+
 /**
  * Computes stage_after and next_review_date_after on the client from stage_before and result
- * using the exact same [1, 3, 7, 14, 30, 60] scheduling ladder as the backend.
+ * using the exact same [1, 3, 7, 14, 30, 60] / [2, 2, 4, 7, 14, 30] scheduling ladders as the backend.
  */
 export function computeClientReviewTransition({ stageBefore, reviewDate, result }) {
   const base = Number.isInteger(Number(stageBefore))
@@ -260,11 +268,11 @@ export function computeClientReviewTransition({ stageBefore, reviewDate, result 
     stageAfter = Math.min(base + 1, MAX_STAGE);
     intervalDays = STAGE_DAYS[stageAfter];
   } else if (result === 'familiar') {
-    stageAfter = Math.max(base - 1, MIN_STAGE);
-    intervalDays = 1;
+    stageAfter = base;
+    intervalDays = FAMILIAR_DAYS[base];
   } else {
     stageAfter = MIN_STAGE;
-    intervalDays = 1;
+    intervalDays = STAGE_DAYS[MIN_STAGE];
   }
 
   return {
@@ -424,10 +432,14 @@ export function createFlashcardApp(doc = document, win = window) {
     btnRemembered: doc.getElementById('btn-remembered'),
     btnFamiliar: doc.getElementById('btn-familiar'),
     btnForgotten: doc.getElementById('btn-forgotten'),
+    hintRemembered: doc.getElementById('hint-remembered'),
+    hintFamiliar: doc.getElementById('hint-familiar'),
+    hintForgotten: doc.getElementById('hint-forgotten'),
     doneSubtitle: doc.getElementById('done-subtitle'),
     statRemembered: doc.getElementById('stat-remembered'),
     statFamiliar: doc.getElementById('stat-familiar'),
     statForgotten: doc.getElementById('stat-forgotten'),
+    btnLoadMore: doc.getElementById('btn-load-more'),
     btnCopyResults: doc.getElementById('btn-copy-results'),
     btnReviewCards: doc.getElementById('btn-review-cards'),
     copyFeedback: doc.getElementById('copy-feedback'),
@@ -436,6 +448,12 @@ export function createFlashcardApp(doc = document, win = window) {
 
   const state = {
     sessionDate: '',
+    sessionStats: {
+      daily_limit: 15,
+      deferred_due_count: 0,
+      has_more_due: false,
+      total_backlog_due: 0
+    },
     cards: [],
     currentIndex: 0,
     isRevealed: false,
@@ -617,6 +635,26 @@ export function createFlashcardApp(doc = document, win = window) {
     els.flipHint.hidden = state.isRevealed;
     els.flashcard.setAttribute('aria-expanded', state.isRevealed ? 'true' : 'false');
 
+    const baseStage = Number.isInteger(Number(card.stage_before_today))
+      ? Math.max(MIN_STAGE, Math.min(MAX_STAGE, Number(card.stage_before_today)))
+      : Number.isInteger(Number(card.stage))
+        ? Math.max(MIN_STAGE, Math.min(MAX_STAGE, Number(card.stage)))
+        : MIN_STAGE;
+    const intervals = card.next_intervals || {
+      remembered: STAGE_DAYS[Math.min(baseStage + 1, MAX_STAGE)],
+      familiar: FAMILIAR_DAYS[baseStage],
+      forgotten: STAGE_DAYS[MIN_STAGE]
+    };
+    if (els.hintRemembered) {
+      els.hintRemembered.textContent = formatIntervalHint(intervals.remembered);
+    }
+    if (els.hintFamiliar) {
+      els.hintFamiliar.textContent = formatIntervalHint(intervals.familiar);
+    }
+    if (els.hintForgotten) {
+      els.hintForgotten.textContent = formatIntervalHint(intervals.forgotten);
+    }
+
     const highlightedResult = pendingItem?.result || syncedResult;
     for (const btn of [els.btnRemembered, els.btnFamiliar, els.btnForgotten]) {
       const btnResult = btn.getAttribute('data-result');
@@ -647,10 +685,24 @@ export function createFlashcardApp(doc = document, win = window) {
     }
 
     const pendingCount = state.pendingRetriesMap.size;
+    const deferredCount = Number(state.sessionStats?.deferred_due_count || 0);
     if (pendingCount > 0) {
       els.doneSubtitle.textContent = `注意：有 ${pendingCount} 张卡片尚未同步至云端（待重试），导出 JSON 中已按排期公式计算并标注 synced: false。`;
+    } else if (deferredCount > 0) {
+      els.doneSubtitle.textContent = `今日 ${total} 张已完成，排期已写入云端 D1。另有 ${deferredCount} 张到期词已自动顺延，明天继续即可；精力充沛也可以再练一组。`;
     } else {
       els.doneSubtitle.textContent = `今日共完成 ${total} 张到期生词卡片，排期与复习历史已全部写入云端 D1。`;
+    }
+
+    if (els.btnLoadMore) {
+      if (pendingCount === 0 && deferredCount > 0) {
+        const nextStep = Math.min(LOAD_MORE_STEP, deferredCount);
+        els.btnLoadMore.textContent = `再来一组（+${nextStep} 张）`;
+        els.btnLoadMore.hidden = false;
+        els.btnLoadMore.disabled = false;
+      } else {
+        els.btnLoadMore.hidden = true;
+      }
     }
 
     els.statRemembered.textContent = String(remembered);
@@ -841,7 +893,7 @@ export function createFlashcardApp(doc = document, win = window) {
     }
   }
 
-  async function init() {
+  async function loadSession({ limit = null } = {}) {
     tts.stop();
     showTtsNotice('');
     showBanner('');
@@ -851,9 +903,15 @@ export function createFlashcardApp(doc = document, win = window) {
       const search = win.location?.search || '';
       const params = new URLSearchParams(search);
       const dateQuery = params.get('date');
-      const apiUrl = dateQuery
-        ? `/api/today?date=${encodeURIComponent(dateQuery)}`
-        : '/api/today';
+      const query = new URLSearchParams();
+      if (dateQuery) {
+        query.set('date', dateQuery);
+      }
+      if (Number.isInteger(limit) && limit > 0) {
+        query.set('limit', String(limit));
+      }
+      const qs = query.toString();
+      const apiUrl = qs ? `/api/today?${qs}` : '/api/today';
 
       const res = await win.fetch(apiUrl, {
         headers: { Accept: 'application/json' }
@@ -861,7 +919,7 @@ export function createFlashcardApp(doc = document, win = window) {
 
       const contentType = res.headers.get('content-type') || '';
       if (res.redirected || !contentType.includes('application/json')) {
-        throw new Error('登录状态可能已过期（Cloudflare Access），请刷新页面重新登录。');
+        throw new Error('登录状态可能已过期（Cloudflare Access），请刷新页面重新验证。');
       }
 
       const data = await res.json();
@@ -870,6 +928,12 @@ export function createFlashcardApp(doc = document, win = window) {
       }
 
       state.sessionDate = data.date;
+      state.sessionStats = data.stats || {
+        daily_limit: 15,
+        deferred_due_count: 0,
+        has_more_due: false,
+        total_backlog_due: Array.isArray(data.cards) ? data.cards.length : 0
+      };
       state.cards = Array.isArray(data.cards) ? data.cards : [];
       state.receiptsMap = new Map();
 
@@ -914,6 +978,19 @@ export function createFlashcardApp(doc = document, win = window) {
       showBanner(err.message || '加载今日生词失败，请检查网络后刷新重试。');
       els.loadingView.innerHTML = '<p class="state-desc">暂时无法读取今日卡片，请刷新页面重试。</p>';
     }
+  }
+
+  async function init() {
+    return loadSession();
+  }
+
+  async function loadMoreCards() {
+    if (state.isSubmitting) return;
+    if (els.btnLoadMore) {
+      els.btnLoadMore.disabled = true;
+    }
+    const nextLimit = state.cards.length + LOAD_MORE_STEP;
+    await loadSession({ limit: nextLimit });
   }
 
   function speakCurrentField(key) {
@@ -987,6 +1064,12 @@ export function createFlashcardApp(doc = document, win = window) {
     }
   });
 
+  if (els.btnLoadMore) {
+    els.btnLoadMore.addEventListener('click', () => {
+      loadMoreCards();
+    });
+  }
+
   els.btnCopyResults.addEventListener('click', () => {
     copyResultsToClipboard();
   });
@@ -995,6 +1078,7 @@ export function createFlashcardApp(doc = document, win = window) {
     state,
     tts,
     init,
+    loadMoreCards,
     revealCard,
     handleGradeClick,
     retryPendingSubmissions,
